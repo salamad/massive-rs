@@ -98,6 +98,8 @@
 pub mod auth;
 pub mod config;
 pub mod error;
+pub mod metrics;
+pub mod parse;
 pub mod util;
 
 pub mod rest;
@@ -112,6 +114,8 @@ pub mod models;
 pub use auth::{ApiKey, AuthMode};
 pub use config::{PaginationMode, RestConfig};
 pub use error::{MassiveError, Result};
+pub use metrics::{ClientStats, MetricsSink, NoopMetrics, StatsSnapshot, TracingMetrics};
+pub use parse::parse_ws_events;
 
 #[cfg(feature = "ws")]
 pub use config::{DispatchConfig, Feed, Market, OverflowPolicy, ReconnectConfig, WsConfig};
