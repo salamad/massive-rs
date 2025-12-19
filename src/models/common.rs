@@ -10,7 +10,7 @@ use serde::{Deserialize, Serialize};
 ///
 /// Represents price and volume data aggregated over a time period,
 /// commonly used for charting and technical analysis.
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Default, Serialize, Deserialize)]
 pub struct AggregateBar {
     /// Ticker symbol
     #[serde(rename = "T", skip_serializing_if = "Option::is_none")]
@@ -280,7 +280,7 @@ pub struct DailyBar {
 }
 
 /// Ticker details.
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Default, Serialize, Deserialize)]
 pub struct Ticker {
     /// Ticker symbol
     pub ticker: String,
