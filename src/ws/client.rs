@@ -1,25 +1,34 @@
 //! WebSocket client implementation.
 //!
 //! This module contains the core WebSocket client for connecting to
-//! Massive real-time data streams.
+//! Massive real-time data streams with automatic reconnection,
+//! backpressure handling, and efficient message dispatch.
 
-use crate::auth::ApiKey;
-use crate::config::{DispatchConfig, ReconnectConfig, WsConfig};
+use crate::config::{OverflowPolicy, WsConfig};
 use crate::error::{MassiveError, WsError};
 use crate::ws::models::events::{parse_ws_message, WsEvent};
 use crate::ws::protocol::{Subscription, WsAuthMessage, WsSubscribeMessage};
 use dashmap::DashSet;
 use futures::{SinkExt, StreamExt};
-use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicU32, AtomicU64, Ordering};
 use std::sync::Arc;
-use tokio::sync::{mpsc, oneshot};
+use tokio::sync::{mpsc, oneshot, watch};
+use tokio::time::{Duration, Instant};
 use tokio_tungstenite::{connect_async, tungstenite::Message};
 use tracing::{debug, error, info, instrument, warn};
 
 /// WebSocket client for Massive.com streaming data.
 ///
 /// This client manages WebSocket connections to the Massive real-time
-/// data service, handling authentication, subscriptions, and reconnection.
+/// data service, handling authentication, subscriptions, reconnection,
+/// and backpressure.
+///
+/// # Features
+///
+/// - Automatic reconnection with exponential backoff
+/// - Subscription management with resubscribe on reconnect
+/// - Backpressure handling with configurable overflow policy
+/// - Ping/pong keepalive monitoring
 ///
 /// # Example
 ///
@@ -47,6 +56,8 @@ pub struct WsClient {
 pub struct WsHandle {
     cmd_tx: mpsc::Sender<WsCommand>,
     state: Arc<WsState>,
+    /// Watch channel for connection state changes
+    state_rx: watch::Receiver<ConnectionState>,
 }
 
 /// Shared state for WebSocket connection.
@@ -58,8 +69,29 @@ pub struct WsState {
     pub authenticated: AtomicBool,
     /// Current subscriptions
     pub subscriptions: DashSet<Subscription>,
-    /// Timestamp of last message received (monotonic, for internal use)
-    pub last_message: AtomicU64,
+    /// Timestamp of last message received (Unix millis)
+    pub last_message_time: AtomicU64,
+    /// Number of messages received
+    pub message_count: AtomicU64,
+    /// Number of reconnection attempts
+    pub reconnect_count: AtomicU32,
+    /// Shutdown flag
+    shutdown: AtomicBool,
+}
+
+/// Connection state for monitoring.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ConnectionState {
+    /// Connecting to server
+    Connecting,
+    /// Connected and authenticating
+    Authenticating,
+    /// Authenticated and ready
+    Connected,
+    /// Reconnecting after disconnection
+    Reconnecting(u32),
+    /// Disconnected (terminal state)
+    Disconnected,
 }
 
 /// Stream of WebSocket events.
@@ -69,13 +101,15 @@ pub type WsEventStream =
 /// Batch of WebSocket messages (may contain 1 or more events).
 ///
 /// Messages from the WebSocket are delivered in batches for efficiency.
-/// Each batch includes the timestamp when it was received.
+/// Each batch includes timing information for latency analysis.
 #[derive(Debug, Clone)]
 pub struct WsMessageBatch {
     /// Events in this batch
     pub events: Vec<WsEvent>,
-    /// When this batch was received
-    pub received_at: std::time::Instant,
+    /// When this batch was received (monotonic time)
+    pub received_at: Instant,
+    /// Estimated server-to-client latency if available
+    pub latency_hint_ns: Option<u64>,
 }
 
 /// Commands sent to the WebSocket IO task.
@@ -83,6 +117,19 @@ enum WsCommand {
     Subscribe(Vec<Subscription>, oneshot::Sender<Result<(), MassiveError>>),
     Unsubscribe(Vec<Subscription>, oneshot::Sender<Result<(), MassiveError>>),
     Close(oneshot::Sender<()>),
+}
+
+/// Snapshot of connection statistics.
+#[derive(Debug, Clone)]
+pub struct WsStats {
+    /// Total messages received
+    pub message_count: u64,
+    /// Time since last message
+    pub last_message_age: Duration,
+    /// Number of reconnection attempts
+    pub reconnect_count: u32,
+    /// Current subscription count
+    pub subscription_count: usize,
 }
 
 impl WsClient {
@@ -104,58 +151,52 @@ impl WsClient {
     /// Connect to the WebSocket server.
     ///
     /// Returns a handle for managing the connection and a stream of events.
+    /// The connection includes automatic reconnection on disconnection.
     ///
     /// # Errors
     ///
-    /// Returns an error if the connection cannot be established or
+    /// Returns an error if the initial connection cannot be established or
     /// authentication fails.
     #[instrument(skip(self))]
     pub async fn connect(&self) -> Result<(WsHandle, WsEventStream), MassiveError> {
         let url = self.config.build_url();
         info!(url = %url, "Connecting to WebSocket");
 
-        // Establish connection
-        let (ws_stream, _response) = connect_async(&url)
-            .await
-            .map_err(|e| Box::new(WsError::Connection(e)))?;
-
-        let (write, read) = ws_stream.split();
-
         // Create channels
         let (cmd_tx, cmd_rx) = mpsc::channel::<WsCommand>(32);
+        let (state_tx, state_rx) = watch::channel(ConnectionState::Connecting);
         let (event_tx, event_rx) = mpsc::channel(self.config.dispatch.capacity);
 
         // Create shared state
         let state = Arc::new(WsState {
             authenticated: AtomicBool::new(false),
             subscriptions: DashSet::new(),
-            last_message: AtomicU64::new(0),
+            last_message_time: AtomicU64::new(0),
+            message_count: AtomicU64::new(0),
+            reconnect_count: AtomicU32::new(0),
+            shutdown: AtomicBool::new(false),
         });
 
-        // Spawn IO task
+        // Establish initial connection
+        let (ws_stream, _response) = connect_async(&url)
+            .await
+            .map_err(|e| Box::new(WsError::Connection(e)))?;
+
+        let _ = state_tx.send(ConnectionState::Authenticating);
+
+        // Spawn IO task with reconnection logic
         let io_state = state.clone();
-        let api_key = self.config.api_key.clone();
-        let reconnect_config = self.config.reconnect.clone();
-        let dispatch_config = self.config.dispatch.clone();
+        let config = self.config.clone();
 
         tokio::spawn(async move {
-            run_io_task(
-                write,
-                read,
-                cmd_rx,
-                event_tx,
-                io_state,
-                api_key,
-                reconnect_config,
-                dispatch_config,
-            )
-            .await;
+            run_io_loop(ws_stream, cmd_rx, event_tx, io_state, config, state_tx).await;
         });
 
         // Create handle
         let handle = WsHandle {
             cmd_tx,
             state: state.clone(),
+            state_rx,
         };
 
         // Wait for authentication
@@ -172,6 +213,8 @@ impl WsClient {
 
 impl WsHandle {
     /// Subscribe to topics.
+    ///
+    /// Subscriptions are persisted and will be restored on reconnection.
     ///
     /// # Arguments
     ///
@@ -209,6 +252,7 @@ impl WsHandle {
 
     /// Close the connection gracefully.
     pub async fn close(&self) -> Result<(), MassiveError> {
+        self.state.shutdown.store(true, Ordering::Release);
         let (tx, rx) = oneshot::channel();
         let _ = self.cmd_tx.send(WsCommand::Close(tx)).await;
         let _ = rx.await;
@@ -220,21 +264,51 @@ impl WsHandle {
         self.state.authenticated.load(Ordering::Acquire)
     }
 
+    /// Get current connection state.
+    pub fn connection_state(&self) -> ConnectionState {
+        *self.state_rx.borrow()
+    }
+
     /// Get current subscriptions.
     pub fn subscriptions(&self) -> Vec<Subscription> {
         self.state.subscriptions.iter().map(|s| s.clone()).collect()
     }
 
+    /// Get connection statistics.
+    pub fn stats(&self) -> WsStats {
+        let last_msg = self.state.last_message_time.load(Ordering::Acquire);
+        let now = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_millis() as u64;
+
+        WsStats {
+            message_count: self.state.message_count.load(Ordering::Acquire),
+            last_message_age: Duration::from_millis(now.saturating_sub(last_msg)),
+            reconnect_count: self.state.reconnect_count.load(Ordering::Acquire),
+            subscription_count: self.state.subscriptions.len(),
+        }
+    }
+
+    /// Wait for a state change.
+    pub async fn wait_for_state(&mut self, target: ConnectionState) {
+        while *self.state_rx.borrow() != target {
+            if self.state_rx.changed().await.is_err() {
+                break;
+            }
+        }
+    }
+
     /// Wait for authentication to complete.
     async fn wait_for_auth(&self) -> Result<(), MassiveError> {
-        let start = std::time::Instant::now();
-        let timeout = std::time::Duration::from_secs(10);
+        let start = Instant::now();
+        let timeout = Duration::from_secs(10);
 
         while start.elapsed() < timeout {
             if self.is_authenticated() {
                 return Ok(());
             }
-            tokio::time::sleep(std::time::Duration::from_millis(10)).await;
+            tokio::time::sleep(Duration::from_millis(10)).await;
         }
 
         Err(MassiveError::Ws(Box::new(WsError::AuthFailed(
@@ -247,6 +321,7 @@ impl std::fmt::Debug for WsHandle {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("WsHandle")
             .field("authenticated", &self.is_authenticated())
+            .field("connection_state", &self.connection_state())
             .field("subscription_count", &self.state.subscriptions.len())
             .finish()
     }
@@ -271,33 +346,143 @@ impl WsClientBuilder {
     }
 }
 
-/// IO task that handles WebSocket read/write.
-#[allow(clippy::too_many_arguments)]
-async fn run_io_task<W, R>(
-    mut write: W,
-    mut read: R,
+/// Main IO loop with reconnection support.
+async fn run_io_loop<S>(
+    initial_stream: S,
     mut cmd_rx: mpsc::Receiver<WsCommand>,
     event_tx: mpsc::Sender<Result<WsMessageBatch, MassiveError>>,
     state: Arc<WsState>,
-    api_key: ApiKey,
-    _reconnect: ReconnectConfig,
-    _dispatch: DispatchConfig,
+    config: WsConfig,
+    state_tx: watch::Sender<ConnectionState>,
 ) where
+    S: futures::Stream<Item = Result<Message, tokio_tungstenite::tungstenite::Error>>
+        + futures::Sink<Message, Error = tokio_tungstenite::tungstenite::Error>
+        + Unpin
+        + Send,
+{
+    let (write, read) = initial_stream.split();
+
+    // Run first connection
+    let result = run_connection(
+        write,
+        read,
+        &mut cmd_rx,
+        &event_tx,
+        &state,
+        &config,
+        &state_tx,
+    )
+    .await;
+
+    if result.is_ok() || state.shutdown.load(Ordering::Acquire) {
+        info!("Connection closed cleanly");
+        let _ = state_tx.send(ConnectionState::Disconnected);
+        return;
+    }
+
+    // Handle reconnection
+    let mut attempt = 0u32;
+
+    loop {
+        // Check for shutdown
+        if state.shutdown.load(Ordering::Acquire) {
+            info!("Shutdown requested, exiting IO loop");
+            break;
+        }
+
+        attempt += 1;
+        state.reconnect_count.store(attempt, Ordering::Release);
+        let _ = state_tx.send(ConnectionState::Reconnecting(attempt));
+
+        if !config.reconnect.should_retry(attempt) {
+            error!(attempt, "Max reconnection attempts reached");
+            let _ = state_tx.send(ConnectionState::Disconnected);
+            break;
+        }
+
+        let delay = config.reconnect.delay_for_attempt(attempt);
+        info!(attempt, ?delay, "Reconnecting after delay");
+        tokio::time::sleep(delay).await;
+
+        let url = config.build_url();
+        let (ws_stream, _) = match connect_async(&url).await {
+            Ok(s) => s,
+            Err(e) => {
+                warn!(error = %e, attempt, "Reconnection failed");
+                continue;
+            }
+        };
+
+        info!(attempt, "Reconnected successfully");
+        state.authenticated.store(false, Ordering::Release);
+
+        let (write, read) = ws_stream.split();
+
+        match run_connection(
+            write,
+            read,
+            &mut cmd_rx,
+            &event_tx,
+            &state,
+            &config,
+            &state_tx,
+        )
+        .await
+        {
+            Ok(()) => {
+                info!("Connection closed cleanly after reconnect");
+                let _ = state_tx.send(ConnectionState::Disconnected);
+                break;
+            }
+            Err(e) => {
+                warn!(error = %e, "Connection error, will reconnect");
+                continue;
+            }
+        }
+    }
+}
+
+/// Handle a single WebSocket connection.
+#[allow(clippy::too_many_arguments)]
+async fn run_connection<W, R>(
+    mut write: W,
+    mut read: R,
+    cmd_rx: &mut mpsc::Receiver<WsCommand>,
+    event_tx: &mpsc::Sender<Result<WsMessageBatch, MassiveError>>,
+    state: &Arc<WsState>,
+    config: &WsConfig,
+    state_tx: &watch::Sender<ConnectionState>,
+) -> Result<(), MassiveError>
+where
     W: futures::Sink<Message, Error = tokio_tungstenite::tungstenite::Error> + Unpin,
     R: futures::Stream<Item = Result<Message, tokio_tungstenite::tungstenite::Error>> + Unpin,
 {
     // Send authentication
-    let auth_msg = WsAuthMessage::new(api_key.expose());
-
-    if let Err(e) = write
+    let auth_msg = WsAuthMessage::new(config.api_key.expose());
+    write
         .send(Message::Text(serde_json::to_string(&auth_msg).unwrap()))
         .await
-    {
-        error!(error = %e, "Failed to send auth message");
-        return;
-    }
+        .map_err(|e| Box::new(WsError::Connection(e)))?;
 
     debug!("Sent authentication message");
+
+    // Resubscribe to existing subscriptions
+    let subs: Vec<_> = state.subscriptions.iter().map(|s| s.clone()).collect();
+    if !subs.is_empty() {
+        let msg = WsSubscribeMessage::subscribe(&subs);
+        write
+            .send(Message::Text(serde_json::to_string(&msg).unwrap()))
+            .await
+            .map_err(|e| Box::new(WsError::Connection(e)))?;
+        debug!(count = subs.len(), "Resubscribed to existing topics");
+    }
+
+    // Set up ping interval
+    let mut ping_interval = tokio::time::interval(config.ping_interval);
+    ping_interval.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
+
+    // Track last activity for idle timeout
+    let mut last_activity = Instant::now();
 
     loop {
         tokio::select! {
@@ -305,11 +490,14 @@ async fn run_io_task<W, R>(
             msg = read.next() => {
                 match msg {
                     Some(Ok(Message::Text(text))) => {
-                        let received_at = std::time::Instant::now();
-                        state.last_message.store(
-                            received_at.elapsed().as_nanos() as u64,
-                            Ordering::Release
-                        );
+                        last_activity = Instant::now();
+                        let received_at = Instant::now();
+                        let now_ms = std::time::SystemTime::now()
+                            .duration_since(std::time::UNIX_EPOCH)
+                            .unwrap()
+                            .as_millis() as u64;
+                        state.last_message_time.store(now_ms, Ordering::Release);
+                        state.message_count.fetch_add(1, Ordering::AcqRel);
 
                         match parse_ws_message(&text) {
                             Ok(events) => {
@@ -318,19 +506,25 @@ async fn run_io_task<W, R>(
                                     if let WsEvent::Status(status) = event {
                                         if status.is_auth_success() {
                                             state.authenticated.store(true, Ordering::Release);
+                                            let _ = state_tx.send(ConnectionState::Connected);
                                             info!("WebSocket authenticated");
                                         } else if status.is_auth_failed() {
                                             error!("WebSocket authentication failed: {:?}", status.message);
-                                            return;
+                                            return Err(MassiveError::Ws(Box::new(
+                                                WsError::AuthFailed(status.message.clone().unwrap_or_default())
+                                            )));
                                         }
                                     }
                                 }
 
-                                let batch = WsMessageBatch { events, received_at };
+                                let batch = WsMessageBatch {
+                                    events,
+                                    received_at,
+                                    latency_hint_ns: None,
+                                };
 
-                                // Non-blocking send with backpressure handling
-                                if event_tx.try_send(Ok(batch)).is_err() {
-                                    warn!("Event buffer full, dropping message");
+                                if try_send_event(event_tx, Ok(batch), config.dispatch.overflow).await.is_err() {
+                                    return Err(MassiveError::Ws(Box::new(WsError::BackpressureOverflow)));
                                 }
                             }
                             Err(e) => {
@@ -339,15 +533,18 @@ async fn run_io_task<W, R>(
                         }
                     }
                     Some(Ok(Message::Ping(data))) => {
+                        last_activity = Instant::now();
                         debug!("Received ping, sending pong");
-                        let _ = write.send(Message::Pong(data)).await;
+                        write.send(Message::Pong(data)).await
+                            .map_err(|e| Box::new(WsError::Connection(e)))?;
                     }
                     Some(Ok(Message::Pong(_))) => {
+                        last_activity = Instant::now();
                         debug!("Received pong");
                     }
                     Some(Ok(Message::Close(frame))) => {
                         info!(?frame, "WebSocket closed by server");
-                        break;
+                        return Err(MassiveError::Ws(Box::new(WsError::Disconnected)));
                     }
                     Some(Ok(Message::Binary(_))) => {
                         debug!("Received unexpected binary message");
@@ -357,11 +554,11 @@ async fn run_io_task<W, R>(
                     }
                     Some(Err(e)) => {
                         error!(error = %e, "WebSocket error");
-                        break;
+                        return Err(MassiveError::Ws(Box::new(WsError::Connection(e))));
                     }
                     None => {
                         info!("WebSocket stream ended");
-                        break;
+                        return Err(MassiveError::Ws(Box::new(WsError::Disconnected)));
                     }
                 }
             }
@@ -403,18 +600,46 @@ async fn run_io_task<W, R>(
                         debug!("Processing close command");
                         let _ = write.send(Message::Close(None)).await;
                         let _ = reply.send(());
-                        break;
+                        return Ok(());
                     }
                     None => {
                         debug!("Command channel closed");
-                        break;
+                        return Ok(());
                     }
+                }
+            }
+
+            // Send ping for keepalive
+            _ = ping_interval.tick() => {
+                if last_activity.elapsed() > config.idle_timeout {
+                    warn!("Connection idle timeout, sending ping");
+                }
+                if let Err(e) = write.send(Message::Ping(vec![])).await {
+                    warn!(error = %e, "Failed to send ping");
+                    return Err(MassiveError::Ws(Box::new(WsError::Connection(e))));
                 }
             }
         }
     }
+}
 
-    info!("WebSocket IO task exiting");
+/// Try to send an event with backpressure handling.
+async fn try_send_event(
+    tx: &mpsc::Sender<Result<WsMessageBatch, MassiveError>>,
+    batch: Result<WsMessageBatch, MassiveError>,
+    policy: OverflowPolicy,
+) -> Result<(), ()> {
+    match tx.try_send(batch) {
+        Ok(()) => Ok(()),
+        Err(mpsc::error::TrySendError::Full(_)) => match policy {
+            OverflowPolicy::DropNewest | OverflowPolicy::DropOldest => {
+                warn!("Buffer full, dropping message");
+                Ok(())
+            }
+            OverflowPolicy::ErrorAndClose => Err(()),
+        },
+        Err(mpsc::error::TrySendError::Closed(_)) => Err(()),
+    }
 }
 
 #[cfg(test)]
@@ -425,10 +650,12 @@ mod tests {
     fn test_ws_message_batch() {
         let batch = WsMessageBatch {
             events: vec![WsEvent::Unknown],
-            received_at: std::time::Instant::now(),
+            received_at: Instant::now(),
+            latency_hint_ns: Some(1000),
         };
 
         assert_eq!(batch.events.len(), 1);
+        assert_eq!(batch.latency_hint_ns, Some(1000));
     }
 
     #[test]
@@ -436,11 +663,15 @@ mod tests {
         let state = WsState {
             authenticated: AtomicBool::new(false),
             subscriptions: DashSet::new(),
-            last_message: AtomicU64::new(0),
+            last_message_time: AtomicU64::new(0),
+            message_count: AtomicU64::new(0),
+            reconnect_count: AtomicU32::new(0),
+            shutdown: AtomicBool::new(false),
         };
 
         assert!(!state.authenticated.load(Ordering::Relaxed));
         assert!(state.subscriptions.is_empty());
+        assert_eq!(state.message_count.load(Ordering::Relaxed), 0);
     }
 
     #[test]
@@ -448,5 +679,43 @@ mod tests {
         let config = WsConfig::default();
         let client = WsClient::builder().config(config).build().unwrap();
         assert!(client.config().api_key.is_empty() || !client.config().api_key.is_empty());
+    }
+
+    #[test]
+    fn test_connection_state_debug() {
+        assert_eq!(format!("{:?}", ConnectionState::Connecting), "Connecting");
+        assert_eq!(
+            format!("{:?}", ConnectionState::Reconnecting(3)),
+            "Reconnecting(3)"
+        );
+    }
+
+    #[test]
+    fn test_ws_stats() {
+        let state = Arc::new(WsState {
+            authenticated: AtomicBool::new(true),
+            subscriptions: DashSet::new(),
+            last_message_time: AtomicU64::new(0),
+            message_count: AtomicU64::new(42),
+            reconnect_count: AtomicU32::new(2),
+            shutdown: AtomicBool::new(false),
+        });
+
+        state.subscriptions.insert(Subscription::trade("AAPL"));
+        state.subscriptions.insert(Subscription::quote("AAPL"));
+
+        let (_, state_rx) = watch::channel(ConnectionState::Connected);
+        let (cmd_tx, _) = mpsc::channel(1);
+
+        let handle = WsHandle {
+            cmd_tx,
+            state,
+            state_rx,
+        };
+
+        let stats = handle.stats();
+        assert_eq!(stats.message_count, 42);
+        assert_eq!(stats.reconnect_count, 2);
+        assert_eq!(stats.subscription_count, 2);
     }
 }
