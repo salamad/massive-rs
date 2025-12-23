@@ -16,10 +16,16 @@ use std::borrow::Cow;
 ///
 /// # Example
 ///
-/// ```ignore
+/// ```
 /// use massive_rs::rest::request::RestRequest;
 /// use reqwest::Method;
+/// use serde::Deserialize;
 /// use std::borrow::Cow;
+///
+/// #[derive(Debug, Deserialize)]
+/// struct TickerDetails {
+///     ticker: String,
+/// }
 ///
 /// struct GetTickerDetailsRequest {
 ///     ticker: String,
@@ -36,6 +42,9 @@ use std::borrow::Cow;
 ///         format!("/v3/reference/tickers/{}", self.ticker).into()
 ///     }
 /// }
+///
+/// let req = GetTickerDetailsRequest { ticker: "AAPL".into() };
+/// assert_eq!(req.path(), "/v3/reference/tickers/AAPL");
 /// ```
 pub trait RestRequest: Send + Sync {
     /// Response type for this request.
@@ -78,7 +87,37 @@ pub trait RestRequest: Send + Sync {
 ///
 /// # Example
 ///
-/// ```ignore
+/// ```
+/// use massive_rs::rest::request::{RestRequest, PaginatableRequest};
+/// use reqwest::Method;
+/// use serde::Deserialize;
+/// use std::borrow::Cow;
+///
+/// #[derive(Debug, Clone, Deserialize)]
+/// struct AggregateBar {
+///     pub o: f64,  // open
+///     pub c: f64,  // close
+/// }
+///
+/// #[derive(Debug, Deserialize)]
+/// struct AggsResponse {
+///     pub results: Vec<AggregateBar>,
+///     pub next_url: Option<String>,
+/// }
+///
+/// #[derive(Clone)]
+/// struct GetAggsRequest {
+///     ticker: String,
+/// }
+///
+/// impl RestRequest for GetAggsRequest {
+///     type Response = AggsResponse;
+///     fn method(&self) -> Method { Method::GET }
+///     fn path(&self) -> Cow<'static, str> {
+///         format!("/v2/aggs/ticker/{}/range/1/day/2024-01-01/2024-01-31", self.ticker).into()
+///     }
+/// }
+///
 /// impl PaginatableRequest for GetAggsRequest {
 ///     type Item = AggregateBar;
 ///

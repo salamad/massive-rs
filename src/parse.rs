@@ -12,11 +12,12 @@
 //!
 //! The parsing functions automatically use SIMD when available:
 //!
-//! ```ignore
+//! ```
 //! use massive_rs::parse::parse_ws_events;
 //!
-//! let json = r#"[{"ev":"T","sym":"AAPL","p":150.0,"s":100,"t":1234567890}]"#;
-//! let events = parse_ws_events(json)?;
+//! let json = r#"[{"ev":"T","sym":"AAPL","x":4,"i":"123","z":3,"p":150.0,"s":100,"t":1234567890,"q":1}]"#;
+//! let events = parse_ws_events(json).unwrap();
+//! assert_eq!(events.len(), 1);
 //! ```
 
 use crate::error::MassiveError;

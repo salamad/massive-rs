@@ -39,8 +39,19 @@ type PageFuture<T> = Pin<Box<dyn Future<Output = Result<T, MassiveError>> + Send
 ///
 /// # Example
 ///
-/// ```ignore
+/// ```no_run
+/// use massive_rs::rest::RestClient;
+/// use massive_rs::rest::endpoints::GetAggsRequest;
+/// use massive_rs::rest::endpoints::Timespan;
 /// use futures::StreamExt;
+///
+/// # async fn example() -> Result<(), Box<dyn std::error::Error>> {
+/// let client = RestClient::from_api_key(std::env::var("POLYGON_API_KEY")?)?;
+/// let request = GetAggsRequest::new("AAPL")
+///     .multiplier(1)
+///     .timespan(Timespan::Day)
+///     .from("2024-01-01")
+///     .to("2024-01-31");
 ///
 /// let mut stream = client.stream(request);
 ///
@@ -48,6 +59,8 @@ type PageFuture<T> = Pin<Box<dyn Future<Output = Result<T, MassiveError>> + Send
 ///     let item = result?;
 ///     println!("{:?}", item);
 /// }
+/// # Ok(())
+/// # }
 /// ```
 pub struct PageStream<R>
 where

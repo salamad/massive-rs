@@ -9,39 +9,53 @@ use serde::{Deserialize, Serialize};
 use std::borrow::Cow;
 
 /// A single quote (NBBO) record.
+///
+/// Note: The API uses different field names in v2 vs v3 endpoints.
+/// This struct accepts both formats using serde aliases.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Quote {
+    /// Ticker symbol
+    #[serde(
+        rename = "T",
+        alias = "ticker",
+        skip_serializing_if = "Option::is_none"
+    )]
+    pub ticker: Option<String>,
     /// Ask exchange ID
+    #[serde(rename = "X", alias = "ask_exchange")]
     pub ask_exchange: Option<u8>,
     /// Ask price
+    #[serde(rename = "P", alias = "ask_price")]
     pub ask_price: f64,
     /// Ask size
+    #[serde(rename = "S", alias = "ask_size")]
     pub ask_size: u64,
     /// Bid exchange ID
+    #[serde(rename = "x", alias = "bid_exchange")]
     pub bid_exchange: Option<u8>,
     /// Bid price
+    #[serde(rename = "p", alias = "bid_price")]
     pub bid_price: f64,
     /// Bid size
+    #[serde(rename = "s", alias = "bid_size")]
     pub bid_size: u64,
     /// Quote conditions
-    #[serde(default)]
+    #[serde(rename = "c", alias = "conditions", default)]
     pub conditions: Vec<i32>,
     /// SIP timestamp
-    #[serde(rename = "sip_timestamp")]
+    #[serde(rename = "t", alias = "sip_timestamp")]
     pub sip_timestamp: Option<i64>,
     /// Participant timestamp
-    #[serde(rename = "participant_timestamp")]
+    #[serde(rename = "y", alias = "participant_timestamp")]
     pub participant_timestamp: Option<i64>,
-    /// TRF timestamp
-    #[serde(rename = "trf_timestamp")]
-    pub trf_timestamp: Option<i64>,
     /// Indicators
-    #[serde(default)]
+    #[serde(rename = "i", alias = "indicators", default)]
     pub indicators: Vec<i32>,
     /// Sequence number
-    #[serde(rename = "sequence_number")]
+    #[serde(rename = "q", alias = "sequence_number")]
     pub sequence_number: Option<u64>,
     /// Tape
+    #[serde(rename = "z", alias = "tape")]
     pub tape: Option<u8>,
 }
 
@@ -277,6 +291,7 @@ mod tests {
     #[test]
     fn test_quote_calculations() {
         let quote = Quote {
+            ticker: Some("AAPL".into()),
             ask_exchange: Some(4),
             ask_price: 150.50,
             ask_size: 100,
@@ -286,7 +301,6 @@ mod tests {
             conditions: vec![],
             sip_timestamp: Some(1703001234567),
             participant_timestamp: None,
-            trf_timestamp: None,
             indicators: vec![],
             sequence_number: Some(12345),
             tape: Some(3),
@@ -301,6 +315,7 @@ mod tests {
     #[test]
     fn test_quote_crossed() {
         let quote = Quote {
+            ticker: None,
             ask_exchange: Some(4),
             ask_price: 150.30,
             ask_size: 100,
@@ -310,7 +325,6 @@ mod tests {
             conditions: vec![],
             sip_timestamp: None,
             participant_timestamp: None,
-            trf_timestamp: None,
             indicators: vec![],
             sequence_number: None,
             tape: None,
@@ -326,13 +340,13 @@ mod tests {
             "request_id": "abc123",
             "results": [
                 {
-                    "ask_exchange": 4,
-                    "ask_price": 150.50,
-                    "ask_size": 100,
-                    "bid_exchange": 7,
-                    "bid_price": 150.40,
-                    "bid_size": 200,
-                    "sip_timestamp": 1703001234567
+                    "X": 4,
+                    "P": 150.50,
+                    "S": 100,
+                    "x": 7,
+                    "p": 150.40,
+                    "s": 200,
+                    "t": 1703001234567
                 }
             ],
             "next_url": "https://api.massive.com/v3/quotes/AAPL?cursor=abc"

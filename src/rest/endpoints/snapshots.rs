@@ -107,7 +107,7 @@ pub struct SnapshotTrade {
 pub struct MinuteSnapshot {
     /// Accumulated volume
     #[serde(rename = "av")]
-    pub accumulated_volume: Option<u64>,
+    pub accumulated_volume: Option<f64>,
     /// Open price
     #[serde(rename = "o")]
     pub open: f64,

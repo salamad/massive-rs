@@ -9,37 +9,51 @@ use serde::{Deserialize, Serialize};
 use std::borrow::Cow;
 
 /// A single trade record.
+///
+/// Note: The API uses different field names in v2 vs v3 endpoints.
+/// This struct accepts both formats using serde aliases.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Trade {
+    /// Ticker symbol
+    #[serde(
+        rename = "T",
+        alias = "ticker",
+        skip_serializing_if = "Option::is_none"
+    )]
+    pub ticker: Option<String>,
     /// Trade ID
-    #[serde(rename = "id")]
+    #[serde(rename = "i", alias = "id")]
     pub id: Option<String>,
     /// Trade conditions
-    #[serde(default)]
+    #[serde(rename = "c", alias = "conditions", default)]
     pub conditions: Vec<i32>,
     /// Exchange ID
+    #[serde(rename = "x", alias = "exchange")]
     pub exchange: Option<u8>,
     /// Price
+    #[serde(rename = "p", alias = "price")]
     pub price: f64,
     /// SIP timestamp
-    #[serde(rename = "sip_timestamp")]
+    #[serde(rename = "t", alias = "sip_timestamp")]
     pub sip_timestamp: Option<i64>,
     /// Participant timestamp
-    #[serde(rename = "participant_timestamp")]
+    #[serde(rename = "y", alias = "participant_timestamp")]
     pub participant_timestamp: Option<i64>,
     /// TRF timestamp
-    #[serde(rename = "trf_timestamp")]
+    #[serde(rename = "f", alias = "trf_timestamp")]
     pub trf_timestamp: Option<i64>,
     /// Size
+    #[serde(rename = "s", alias = "size")]
     pub size: u64,
     /// Tape (1=NYSE, 2=AMEX, 3=NASDAQ)
+    #[serde(rename = "z", alias = "tape")]
     pub tape: Option<u8>,
     /// Sequence number
-    #[serde(rename = "sequence_number")]
+    #[serde(rename = "q", alias = "sequence_number")]
     pub sequence_number: Option<u64>,
-    /// TRF ID
-    #[serde(rename = "trf_id")]
-    pub trf_id: Option<u8>,
+    /// Reporting facility ID / TRF ID
+    #[serde(rename = "r", alias = "trf_id")]
+    pub reporting_facility: Option<u8>,
 }
 
 impl Trade {
@@ -263,6 +277,7 @@ mod tests {
     #[test]
     fn test_trade_value() {
         let trade = Trade {
+            ticker: Some("AAPL".into()),
             id: Some("123".into()),
             conditions: vec![],
             exchange: Some(4),
@@ -273,7 +288,7 @@ mod tests {
             size: 100,
             tape: Some(3),
             sequence_number: Some(12345),
-            trf_id: None,
+            reporting_facility: None,
         };
 
         assert_eq!(trade.value(), 15050.0);
@@ -286,13 +301,13 @@ mod tests {
             "request_id": "abc123",
             "results": [
                 {
-                    "id": "trade1",
-                    "conditions": [0],
-                    "exchange": 4,
-                    "price": 150.25,
-                    "sip_timestamp": 1703001234567,
-                    "size": 100,
-                    "tape": 3
+                    "i": "trade1",
+                    "c": [0],
+                    "x": 4,
+                    "p": 150.25,
+                    "t": 1703001234567,
+                    "s": 100,
+                    "z": 3
                 }
             ],
             "next_url": "https://api.massive.com/v3/trades/AAPL?cursor=abc"
