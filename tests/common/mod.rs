@@ -13,11 +13,11 @@ use massive_rs::rest::RestClient;
 use massive_rs::config::WsConfig;
 
 /// Environment variable name for the API key (Polygon.io compatible).
-pub const API_KEY_ENV_VAR: &str = "POLYGON_API_KEY";
+pub const API_KEY_ENV_VAR: &str = "MASSIVE_API_KEY";
 
 /// Check if the API key is available.
 ///
-/// Returns `true` if the `POLYGON_API_KEY` environment variable is set.
+/// Returns `true` if the `MASSIVE_API_KEY` environment variable is set.
 pub fn has_api_key() -> bool {
     std::env::var(API_KEY_ENV_VAR).is_ok()
 }
@@ -26,17 +26,17 @@ pub fn has_api_key() -> bool {
 ///
 /// # Panics
 ///
-/// Panics if `POLYGON_API_KEY` is not set.
+/// Panics if `MASSIVE_API_KEY` is not set.
 pub fn get_api_key() -> String {
     std::env::var(API_KEY_ENV_VAR)
-        .expect("POLYGON_API_KEY environment variable must be set for integration tests")
+        .expect("MASSIVE_API_KEY environment variable must be set for integration tests")
 }
 
 /// Create a REST client configured with the API key from environment.
 ///
 /// # Panics
 ///
-/// Panics if `POLYGON_API_KEY` is not set or if the client cannot be created.
+/// Panics if `MASSIVE_API_KEY` is not set or if the client cannot be created.
 pub fn create_rest_client() -> RestClient {
     let api_key = get_api_key();
 

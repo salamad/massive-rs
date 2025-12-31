@@ -46,7 +46,7 @@ type PageFuture<T> = Pin<Box<dyn Future<Output = Result<T, MassiveError>> + Send
 /// use futures::StreamExt;
 ///
 /// # async fn example() -> Result<(), Box<dyn std::error::Error>> {
-/// let client = RestClient::from_api_key(std::env::var("POLYGON_API_KEY")?)?;
+/// let client = RestClient::from_api_key(std::env::var("MASSIVE_API_KEY")?)?;
 /// let request = GetAggsRequest::new("AAPL")
 ///     .multiplier(1)
 ///     .timespan(Timespan::Day)

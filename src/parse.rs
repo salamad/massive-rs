@@ -22,6 +22,8 @@
 
 use crate::error::MassiveError;
 use crate::ws::models::events::WsEvent;
+#[cfg(not(feature = "simd-json"))]
+use serde::de::Error as _;
 
 /// Parse WebSocket events from a JSON string.
 ///

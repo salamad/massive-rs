@@ -1,7 +1,7 @@
 //! REST API Integration Tests
 //!
 //! This module contains comprehensive integration tests for all REST API endpoints.
-//! Tests require the `POLYGON_API_KEY` environment variable to be set.
+//! Tests require the `MASSIVE_API_KEY` environment variable to be set.
 //!
 //! Run with: `cargo test --test rest_integration --features ws`
 
@@ -28,7 +28,7 @@ use massive_rs::rest::endpoints::{
 #[tokio::test]
 async fn test_get_aggregates() {
     if !has_api_key() {
-        eprintln!("Skipping test: POLYGON_API_KEY not set");
+        eprintln!("Skipping test: MASSIVE_API_KEY not set");
         return;
     }
 
@@ -86,7 +86,7 @@ async fn test_get_aggregates() {
 #[tokio::test]
 async fn test_get_aggregates_different_timespans() {
     if !has_api_key() {
-        eprintln!("Skipping test: POLYGON_API_KEY not set");
+        eprintln!("Skipping test: MASSIVE_API_KEY not set");
         return;
     }
 
@@ -124,7 +124,7 @@ async fn test_get_aggregates_different_timespans() {
 #[tokio::test]
 async fn test_get_previous_close() {
     if !has_api_key() {
-        eprintln!("Skipping test: POLYGON_API_KEY not set");
+        eprintln!("Skipping test: MASSIVE_API_KEY not set");
         return;
     }
 
@@ -158,7 +158,7 @@ async fn test_get_previous_close() {
 #[tokio::test]
 async fn test_get_daily_open_close() {
     if !has_api_key() {
-        eprintln!("Skipping test: POLYGON_API_KEY not set");
+        eprintln!("Skipping test: MASSIVE_API_KEY not set");
         return;
     }
 
@@ -208,7 +208,7 @@ async fn test_get_daily_open_close() {
 #[tokio::test]
 async fn test_get_trades() {
     if !has_api_key() {
-        eprintln!("Skipping test: POLYGON_API_KEY not set");
+        eprintln!("Skipping test: MASSIVE_API_KEY not set");
         return;
     }
 
@@ -258,7 +258,7 @@ async fn test_get_trades() {
 #[tokio::test]
 async fn test_get_last_trade() {
     if !has_api_key() {
-        eprintln!("Skipping test: POLYGON_API_KEY not set");
+        eprintln!("Skipping test: MASSIVE_API_KEY not set");
         return;
     }
 
@@ -295,7 +295,7 @@ async fn test_get_last_trade() {
 #[tokio::test]
 async fn test_get_quotes() {
     if !has_api_key() {
-        eprintln!("Skipping test: POLYGON_API_KEY not set");
+        eprintln!("Skipping test: MASSIVE_API_KEY not set");
         return;
     }
 
@@ -360,7 +360,7 @@ async fn test_get_quotes() {
 #[tokio::test]
 async fn test_get_last_quote() {
     if !has_api_key() {
-        eprintln!("Skipping test: POLYGON_API_KEY not set");
+        eprintln!("Skipping test: MASSIVE_API_KEY not set");
         return;
     }
 
@@ -398,7 +398,7 @@ async fn test_get_last_quote() {
 #[tokio::test]
 async fn test_quote_helper_methods() {
     if !has_api_key() {
-        eprintln!("Skipping test: POLYGON_API_KEY not set");
+        eprintln!("Skipping test: MASSIVE_API_KEY not set");
         return;
     }
 
@@ -431,7 +431,7 @@ async fn test_quote_helper_methods() {
 #[tokio::test]
 async fn test_get_ticker_snapshot() {
     if !has_api_key() {
-        eprintln!("Skipping test: POLYGON_API_KEY not set");
+        eprintln!("Skipping test: MASSIVE_API_KEY not set");
         return;
     }
 
@@ -476,7 +476,7 @@ async fn test_get_ticker_snapshot() {
 #[tokio::test]
 async fn test_get_all_tickers_snapshot() {
     if !has_api_key() {
-        eprintln!("Skipping test: POLYGON_API_KEY not set");
+        eprintln!("Skipping test: MASSIVE_API_KEY not set");
         return;
     }
 
@@ -514,7 +514,7 @@ async fn test_get_all_tickers_snapshot() {
 #[tokio::test]
 async fn test_get_gainers() {
     if !has_api_key() {
-        eprintln!("Skipping test: POLYGON_API_KEY not set");
+        eprintln!("Skipping test: MASSIVE_API_KEY not set");
         return;
     }
 
@@ -551,7 +551,7 @@ async fn test_get_gainers() {
 #[tokio::test]
 async fn test_get_losers() {
     if !has_api_key() {
-        eprintln!("Skipping test: POLYGON_API_KEY not set");
+        eprintln!("Skipping test: MASSIVE_API_KEY not set");
         return;
     }
 
@@ -592,7 +592,7 @@ async fn test_get_losers() {
 #[tokio::test]
 async fn test_get_tickers() {
     if !has_api_key() {
-        eprintln!("Skipping test: POLYGON_API_KEY not set");
+        eprintln!("Skipping test: MASSIVE_API_KEY not set");
         return;
     }
 
@@ -633,7 +633,7 @@ async fn test_get_tickers() {
 #[tokio::test]
 async fn test_get_tickers_by_market() {
     if !has_api_key() {
-        eprintln!("Skipping test: POLYGON_API_KEY not set");
+        eprintln!("Skipping test: MASSIVE_API_KEY not set");
         return;
     }
 
@@ -666,7 +666,7 @@ async fn test_get_tickers_by_market() {
 #[tokio::test]
 async fn test_get_ticker_details() {
     if !has_api_key() {
-        eprintln!("Skipping test: POLYGON_API_KEY not set");
+        eprintln!("Skipping test: MASSIVE_API_KEY not set");
         return;
     }
 
@@ -714,7 +714,7 @@ async fn test_get_ticker_details() {
 #[tokio::test]
 async fn test_pagination_streaming() {
     if !has_api_key() {
-        eprintln!("Skipping test: POLYGON_API_KEY not set");
+        eprintln!("Skipping test: MASSIVE_API_KEY not set");
         return;
     }
 
@@ -750,7 +750,7 @@ async fn test_pagination_streaming() {
 #[tokio::test]
 async fn test_trade_pagination() {
     if !has_api_key() {
-        eprintln!("Skipping test: POLYGON_API_KEY not set");
+        eprintln!("Skipping test: MASSIVE_API_KEY not set");
         return;
     }
 
@@ -783,7 +783,7 @@ async fn test_trade_pagination() {
 #[tokio::test]
 async fn test_ticker_pagination() {
     if !has_api_key() {
-        eprintln!("Skipping test: POLYGON_API_KEY not set");
+        eprintln!("Skipping test: MASSIVE_API_KEY not set");
         return;
     }
 
@@ -820,7 +820,7 @@ async fn test_ticker_pagination() {
 #[tokio::test]
 async fn test_invalid_ticker() {
     if !has_api_key() {
-        eprintln!("Skipping test: POLYGON_API_KEY not set");
+        eprintln!("Skipping test: MASSIVE_API_KEY not set");
         return;
     }
 
@@ -855,7 +855,7 @@ async fn test_invalid_ticker() {
 #[tokio::test]
 async fn test_invalid_date_range() {
     if !has_api_key() {
-        eprintln!("Skipping test: POLYGON_API_KEY not set");
+        eprintln!("Skipping test: MASSIVE_API_KEY not set");
         return;
     }
 
@@ -892,7 +892,7 @@ async fn test_invalid_date_range() {
 #[tokio::test]
 async fn test_aggregate_bar_methods() {
     if !has_api_key() {
-        eprintln!("Skipping test: POLYGON_API_KEY not set");
+        eprintln!("Skipping test: MASSIVE_API_KEY not set");
         return;
     }
 
@@ -940,7 +940,7 @@ async fn test_aggregate_bar_methods() {
 #[tokio::test]
 async fn test_concurrent_requests() {
     if !has_api_key() {
-        eprintln!("Skipping test: POLYGON_API_KEY not set");
+        eprintln!("Skipping test: MASSIVE_API_KEY not set");
         return;
     }
 
@@ -970,7 +970,7 @@ async fn test_concurrent_requests() {
 #[tokio::test]
 async fn test_concurrent_multi_ticker() {
     if !has_api_key() {
-        eprintln!("Skipping test: POLYGON_API_KEY not set");
+        eprintln!("Skipping test: MASSIVE_API_KEY not set");
         return;
     }
 
@@ -1018,7 +1018,7 @@ async fn test_concurrent_multi_ticker() {
 #[tokio::test]
 async fn test_get_market_status() {
     if !has_api_key() {
-        eprintln!("Skipping test: POLYGON_API_KEY not set");
+        eprintln!("Skipping test: MASSIVE_API_KEY not set");
         return;
     }
 
@@ -1076,7 +1076,7 @@ async fn test_get_market_status() {
 #[tokio::test]
 async fn test_market_status_valid_values() {
     if !has_api_key() {
-        eprintln!("Skipping test: POLYGON_API_KEY not set");
+        eprintln!("Skipping test: MASSIVE_API_KEY not set");
         return;
     }
 
@@ -1119,7 +1119,7 @@ async fn test_market_status_valid_values() {
 #[tokio::test]
 async fn test_get_rsi() {
     if !has_api_key() {
-        eprintln!("Skipping test: POLYGON_API_KEY not set");
+        eprintln!("Skipping test: MASSIVE_API_KEY not set");
         return;
     }
 
@@ -1181,7 +1181,7 @@ async fn test_get_rsi() {
 #[tokio::test]
 async fn test_get_rsi_different_timespans() {
     if !has_api_key() {
-        eprintln!("Skipping test: POLYGON_API_KEY not set");
+        eprintln!("Skipping test: MASSIVE_API_KEY not set");
         return;
     }
 
@@ -1221,7 +1221,7 @@ async fn test_get_rsi_different_timespans() {
 #[tokio::test]
 async fn test_get_rsi_different_windows() {
     if !has_api_key() {
-        eprintln!("Skipping test: POLYGON_API_KEY not set");
+        eprintln!("Skipping test: MASSIVE_API_KEY not set");
         return;
     }
 
@@ -1257,7 +1257,7 @@ async fn test_get_rsi_different_windows() {
 #[tokio::test]
 async fn test_get_rsi_series_types() {
     if !has_api_key() {
-        eprintln!("Skipping test: POLYGON_API_KEY not set");
+        eprintln!("Skipping test: MASSIVE_API_KEY not set");
         return;
     }
 
@@ -1299,7 +1299,7 @@ async fn test_get_rsi_series_types() {
 #[tokio::test]
 async fn test_get_rsi_with_date_range() {
     if !has_api_key() {
-        eprintln!("Skipping test: POLYGON_API_KEY not set");
+        eprintln!("Skipping test: MASSIVE_API_KEY not set");
         return;
     }
 
@@ -1344,7 +1344,7 @@ async fn test_get_rsi_with_date_range() {
 #[tokio::test]
 async fn test_get_rsi_pagination() {
     if !has_api_key() {
-        eprintln!("Skipping test: POLYGON_API_KEY not set");
+        eprintln!("Skipping test: MASSIVE_API_KEY not set");
         return;
     }
 
@@ -1382,7 +1382,7 @@ async fn test_get_rsi_pagination() {
 #[tokio::test]
 async fn test_rsi_helper_methods() {
     if !has_api_key() {
-        eprintln!("Skipping test: POLYGON_API_KEY not set");
+        eprintln!("Skipping test: MASSIVE_API_KEY not set");
         return;
     }
 
@@ -1431,7 +1431,7 @@ async fn test_rsi_helper_methods() {
 #[tokio::test]
 async fn test_get_rsi_alt_ticker() {
     if !has_api_key() {
-        eprintln!("Skipping test: POLYGON_API_KEY not set");
+        eprintln!("Skipping test: MASSIVE_API_KEY not set");
         return;
     }
 

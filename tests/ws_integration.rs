@@ -1,7 +1,7 @@
 //! WebSocket API Integration Tests
 //!
 //! This module contains comprehensive integration tests for WebSocket functionality.
-//! Tests require the `POLYGON_API_KEY` environment variable to be set.
+//! Tests require the `MASSIVE_API_KEY` environment variable to be set.
 //!
 //! Run with: `cargo test --test ws_integration --features ws`
 
@@ -32,7 +32,7 @@ const WS_SHORT_TIMEOUT: Duration = Duration::from_secs(10);
 #[tokio::test]
 async fn test_ws_connect_and_authenticate() {
     if !has_api_key() {
-        eprintln!("Skipping test: POLYGON_API_KEY not set");
+        eprintln!("Skipping test: MASSIVE_API_KEY not set");
         return;
     }
 
@@ -73,7 +73,7 @@ async fn test_ws_connect_and_authenticate() {
 #[tokio::test]
 async fn test_ws_connect_to_stocks_market() {
     if !has_api_key() {
-        eprintln!("Skipping test: POLYGON_API_KEY not set");
+        eprintln!("Skipping test: MASSIVE_API_KEY not set");
         return;
     }
 
@@ -108,7 +108,7 @@ async fn test_ws_connect_to_stocks_market() {
 #[tokio::test]
 async fn test_ws_subscribe_trade() {
     if !has_api_key() {
-        eprintln!("Skipping test: POLYGON_API_KEY not set");
+        eprintln!("Skipping test: MASSIVE_API_KEY not set");
         return;
     }
 
@@ -150,7 +150,7 @@ async fn test_ws_subscribe_trade() {
 #[tokio::test]
 async fn test_ws_subscribe_quote() {
     if !has_api_key() {
-        eprintln!("Skipping test: POLYGON_API_KEY not set");
+        eprintln!("Skipping test: MASSIVE_API_KEY not set");
         return;
     }
 
@@ -191,7 +191,7 @@ async fn test_ws_subscribe_quote() {
 #[tokio::test]
 async fn test_ws_subscribe_minute_agg() {
     if !has_api_key() {
-        eprintln!("Skipping test: POLYGON_API_KEY not set");
+        eprintln!("Skipping test: MASSIVE_API_KEY not set");
         return;
     }
 
@@ -235,7 +235,7 @@ async fn test_ws_subscribe_minute_agg() {
 #[tokio::test]
 async fn test_ws_subscribe_multiple_tickers() {
     if !has_api_key() {
-        eprintln!("Skipping test: POLYGON_API_KEY not set");
+        eprintln!("Skipping test: MASSIVE_API_KEY not set");
         return;
     }
 
@@ -284,7 +284,7 @@ async fn test_ws_subscribe_multiple_tickers() {
 #[tokio::test]
 async fn test_ws_subscribe_wildcard() {
     if !has_api_key() {
-        eprintln!("Skipping test: POLYGON_API_KEY not set");
+        eprintln!("Skipping test: MASSIVE_API_KEY not set");
         return;
     }
 
@@ -326,7 +326,7 @@ async fn test_ws_subscribe_wildcard() {
 #[tokio::test]
 async fn test_ws_unsubscribe() {
     if !has_api_key() {
-        eprintln!("Skipping test: POLYGON_API_KEY not set");
+        eprintln!("Skipping test: MASSIVE_API_KEY not set");
         return;
     }
 
@@ -382,7 +382,7 @@ async fn test_ws_unsubscribe() {
 #[tokio::test]
 async fn test_ws_subscribe_unsubscribe_cycle() {
     if !has_api_key() {
-        eprintln!("Skipping test: POLYGON_API_KEY not set");
+        eprintln!("Skipping test: MASSIVE_API_KEY not set");
         return;
     }
 
@@ -441,7 +441,7 @@ async fn test_ws_subscribe_unsubscribe_cycle() {
 #[tokio::test]
 async fn test_ws_receive_events() {
     if !has_api_key() {
-        eprintln!("Skipping test: POLYGON_API_KEY not set");
+        eprintln!("Skipping test: MASSIVE_API_KEY not set");
         return;
     }
 
@@ -509,7 +509,7 @@ async fn test_ws_receive_events() {
 #[tokio::test]
 async fn test_ws_event_batch_timing() {
     if !has_api_key() {
-        eprintln!("Skipping test: POLYGON_API_KEY not set");
+        eprintln!("Skipping test: MASSIVE_API_KEY not set");
         return;
     }
 
@@ -558,7 +558,7 @@ async fn test_ws_event_batch_timing() {
 #[tokio::test]
 async fn test_ws_connection_state() {
     if !has_api_key() {
-        eprintln!("Skipping test: POLYGON_API_KEY not set");
+        eprintln!("Skipping test: MASSIVE_API_KEY not set");
         return;
     }
 
@@ -596,7 +596,7 @@ async fn test_ws_connection_state() {
 #[tokio::test]
 async fn test_ws_subscription_tracking() {
     if !has_api_key() {
-        eprintln!("Skipping test: POLYGON_API_KEY not set");
+        eprintln!("Skipping test: MASSIVE_API_KEY not set");
         return;
     }
 
@@ -649,7 +649,7 @@ async fn test_ws_subscription_tracking() {
 #[tokio::test]
 async fn test_ws_graceful_close() {
     if !has_api_key() {
-        eprintln!("Skipping test: POLYGON_API_KEY not set");
+        eprintln!("Skipping test: MASSIVE_API_KEY not set");
         return;
     }
 
@@ -687,7 +687,7 @@ async fn test_ws_graceful_close() {
 #[tokio::test]
 async fn test_ws_custom_configuration() {
     if !has_api_key() {
-        eprintln!("Skipping test: POLYGON_API_KEY not set");
+        eprintln!("Skipping test: MASSIVE_API_KEY not set");
         return;
     }
 
@@ -743,7 +743,7 @@ async fn test_ws_custom_configuration() {
 #[tokio::test]
 async fn test_ws_client_builder() {
     if !has_api_key() {
-        eprintln!("Skipping test: POLYGON_API_KEY not set");
+        eprintln!("Skipping test: MASSIVE_API_KEY not set");
         return;
     }
 
@@ -780,7 +780,7 @@ async fn test_ws_client_builder() {
 #[tokio::test]
 async fn test_ws_handle_debug() {
     if !has_api_key() {
-        eprintln!("Skipping test: POLYGON_API_KEY not set");
+        eprintln!("Skipping test: MASSIVE_API_KEY not set");
         return;
     }
 
@@ -813,7 +813,7 @@ async fn test_ws_handle_debug() {
 #[tokio::test]
 async fn test_ws_handle_clone() {
     if !has_api_key() {
-        eprintln!("Skipping test: POLYGON_API_KEY not set");
+        eprintln!("Skipping test: MASSIVE_API_KEY not set");
         return;
     }
 
@@ -956,7 +956,7 @@ fn test_connection_state_enum() {
 #[tokio::test]
 async fn test_ws_multiple_connections() {
     if !has_api_key() {
-        eprintln!("Skipping test: POLYGON_API_KEY not set");
+        eprintln!("Skipping test: MASSIVE_API_KEY not set");
         return;
     }
 
