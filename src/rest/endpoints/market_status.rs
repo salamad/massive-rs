@@ -16,12 +16,12 @@ use std::borrow::Cow;
 ///
 /// # Example
 ///
-/// ```ignore
+/// ```
 /// use massive_rs::rest::endpoints::GetMarketStatusRequest;
+/// use massive_rs::rest::request::RestRequest;
 ///
-/// let client = RestClient::new(api_key);
-/// let status = client.execute(GetMarketStatusRequest).await?;
-/// println!("Market is: {}", status.market);
+/// let request = GetMarketStatusRequest;
+/// assert_eq!(request.path(), "/v1/marketstatus/now");
 /// ```
 #[derive(Debug, Clone, Copy, Default)]
 pub struct GetMarketStatusRequest;
