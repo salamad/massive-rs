@@ -14,9 +14,10 @@ use futures::StreamExt;
 use massive_rs::config::PaginationMode;
 use massive_rs::rest::endpoints::{
     GetAggsRequest, GetAllTickersSnapshotRequest, GetDailyOpenCloseRequest,
-    GetGainersLosersRequest, GetLastQuoteRequest, GetLastTradeRequest, GetPreviousCloseRequest,
-    GetQuotesRequest, GetTickerDetailsRequest, GetTickerSnapshotRequest, GetTickersRequest,
-    GetTradesRequest, MarketType, Sort, Timespan,
+    GetGainersLosersRequest, GetLastQuoteRequest, GetLastTradeRequest, GetMarketStatusRequest,
+    GetPreviousCloseRequest, GetQuotesRequest, GetRsiRequest, GetTickerDetailsRequest,
+    GetTickerSnapshotRequest, GetTickersRequest, GetTradesRequest, IndicatorTimespan, MarketType,
+    Order, SeriesType, Sort, Timespan,
 };
 
 // ============================================================================
@@ -1007,4 +1008,458 @@ async fn test_concurrent_multi_ticker() {
     }
 
     assert!(success_count > 0, "At least some requests should succeed");
+}
+
+// ============================================================================
+// Market Status Endpoints
+// ============================================================================
+
+/// Test GetMarketStatusRequest - Current market status
+#[tokio::test]
+async fn test_get_market_status() {
+    if !has_api_key() {
+        eprintln!("Skipping test: POLYGON_API_KEY not set");
+        return;
+    }
+
+    let client = create_rest_client();
+
+    let request = GetMarketStatusRequest;
+
+    let response = client.execute(request).await;
+
+    match response {
+        Ok(status) => {
+            // Verify we got valid market status
+            assert!(
+                !status.market.is_empty(),
+                "Market status should not be empty"
+            );
+            assert!(
+                !status.server_time.is_empty(),
+                "Server time should not be empty"
+            );
+
+            println!("Market Status:");
+            println!("  Overall market: {}", status.market);
+            println!("  After hours: {}", status.after_hours);
+            println!("  Early hours: {}", status.early_hours);
+            println!("  Server time: {}", status.server_time);
+            println!("  Exchanges:");
+            println!("    NYSE: {}", status.exchanges.nyse);
+            println!("    NASDAQ: {}", status.exchanges.nasdaq);
+            println!("    OTC: {}", status.exchanges.otc);
+            println!("  Currencies:");
+            println!("    Crypto: {}", status.currencies.crypto);
+            println!("    Forex: {}", status.currencies.fx);
+
+            if let Some(indices) = &status.indices_groups {
+                println!("  Indices Groups:");
+                if let Some(dow) = &indices.dow_jones {
+                    println!("    Dow Jones: {}", dow);
+                }
+                if let Some(sp) = &indices.s_and_p {
+                    println!("    S&P: {}", sp);
+                }
+                if let Some(nasdaq) = &indices.nasdaq {
+                    println!("    NASDAQ: {}", nasdaq);
+                }
+            }
+        }
+        Err(e) => {
+            panic!("Failed to fetch market status: {:?}", e);
+        }
+    }
+}
+
+/// Test market status fields are valid values
+#[tokio::test]
+async fn test_market_status_valid_values() {
+    if !has_api_key() {
+        eprintln!("Skipping test: POLYGON_API_KEY not set");
+        return;
+    }
+
+    let client = create_rest_client();
+    let response = client.execute(GetMarketStatusRequest).await;
+
+    if let Ok(status) = response {
+        // Valid market status values
+        let valid_statuses = ["open", "closed", "extended-hours"];
+
+        // Check that market status is one of the expected values
+        let market_status_valid = valid_statuses.contains(&status.market.as_str())
+            || status.market.starts_with("extended"); // Some variations like "extended-hours"
+
+        println!(
+            "Market status '{}' valid: {}",
+            status.market, market_status_valid
+        );
+
+        // Exchange statuses should be "open" or "closed"
+        let exchange_valid = ["open", "closed"];
+        assert!(
+            exchange_valid.contains(&status.exchanges.nyse.as_str()),
+            "NYSE status should be 'open' or 'closed', got: {}",
+            status.exchanges.nyse
+        );
+        assert!(
+            exchange_valid.contains(&status.exchanges.nasdaq.as_str()),
+            "NASDAQ status should be 'open' or 'closed', got: {}",
+            status.exchanges.nasdaq
+        );
+    }
+}
+
+// ============================================================================
+// Technical Indicator Endpoints
+// ============================================================================
+
+/// Test GetRsiRequest - RSI indicator
+#[tokio::test]
+async fn test_get_rsi() {
+    if !has_api_key() {
+        eprintln!("Skipping test: POLYGON_API_KEY not set");
+        return;
+    }
+
+    let client = create_rest_client();
+
+    let request = GetRsiRequest::new(TEST_TICKER)
+        .timespan(IndicatorTimespan::Day)
+        .window(14)
+        .series_type(SeriesType::Close)
+        .order(Order::Desc)
+        .limit(30);
+
+    let response = client.execute(request).await;
+
+    match response {
+        Ok(rsi) => {
+            assert!(
+                rsi.status.as_deref() == Some("OK") || rsi.status.as_deref() == Some("DELAYED"),
+                "Expected OK or DELAYED status, got: {:?}",
+                rsi.status
+            );
+
+            assert!(
+                !rsi.results.values.is_empty(),
+                "Expected at least one RSI value"
+            );
+
+            println!("RSI values for {} (14-day):", TEST_TICKER);
+            for (i, value) in rsi.results.values.iter().take(5).enumerate() {
+                let condition = if value.is_oversold() {
+                    "OVERSOLD"
+                } else if value.is_overbought() {
+                    "OVERBOUGHT"
+                } else {
+                    "neutral"
+                };
+                println!(
+                    "  {}: timestamp={}, RSI={:.2} ({})",
+                    i, value.timestamp, value.value, condition
+                );
+            }
+
+            // Verify RSI values are in valid range (0-100)
+            for value in &rsi.results.values {
+                assert!(
+                    value.value >= 0.0 && value.value <= 100.0,
+                    "RSI value should be between 0 and 100, got: {}",
+                    value.value
+                );
+            }
+        }
+        Err(e) => {
+            panic!("Failed to fetch RSI: {:?}", e);
+        }
+    }
+}
+
+/// Test RSI with different timespans
+#[tokio::test]
+async fn test_get_rsi_different_timespans() {
+    if !has_api_key() {
+        eprintln!("Skipping test: POLYGON_API_KEY not set");
+        return;
+    }
+
+    let client = create_rest_client();
+
+    let timespans = [
+        IndicatorTimespan::Hour,
+        IndicatorTimespan::Day,
+        IndicatorTimespan::Week,
+    ];
+
+    for timespan in timespans {
+        let request = GetRsiRequest::new(TEST_TICKER)
+            .timespan(timespan)
+            .window(14)
+            .limit(5);
+
+        let response = client.execute(request).await;
+
+        match response {
+            Ok(rsi) => {
+                println!(
+                    "RSI timespan {:?}: {} values",
+                    timespan,
+                    rsi.results.values.len()
+                );
+            }
+            Err(e) => {
+                // Some timespans might have limited data
+                println!("RSI timespan {:?}: {:?}", timespan, e);
+            }
+        }
+    }
+}
+
+/// Test RSI with different window sizes
+#[tokio::test]
+async fn test_get_rsi_different_windows() {
+    if !has_api_key() {
+        eprintln!("Skipping test: POLYGON_API_KEY not set");
+        return;
+    }
+
+    let client = create_rest_client();
+
+    let windows = [7, 14, 21]; // Common RSI periods
+
+    for window in windows {
+        let request = GetRsiRequest::new(TEST_TICKER)
+            .timespan(IndicatorTimespan::Day)
+            .window(window)
+            .limit(5);
+
+        let response = client.execute(request).await;
+
+        match response {
+            Ok(rsi) => {
+                if !rsi.results.values.is_empty() {
+                    println!(
+                        "RSI window {}: latest value = {:.2}",
+                        window, rsi.results.values[0].value
+                    );
+                }
+            }
+            Err(e) => {
+                panic!("Failed to fetch RSI with window {}: {:?}", window, e);
+            }
+        }
+    }
+}
+
+/// Test RSI with series type variations
+#[tokio::test]
+async fn test_get_rsi_series_types() {
+    if !has_api_key() {
+        eprintln!("Skipping test: POLYGON_API_KEY not set");
+        return;
+    }
+
+    let client = create_rest_client();
+
+    let series_types = [
+        SeriesType::Close,
+        SeriesType::Open,
+        SeriesType::High,
+        SeriesType::Low,
+    ];
+
+    for series_type in series_types {
+        let request = GetRsiRequest::new(TEST_TICKER)
+            .timespan(IndicatorTimespan::Day)
+            .window(14)
+            .series_type(series_type)
+            .limit(5);
+
+        let response = client.execute(request).await;
+
+        match response {
+            Ok(rsi) => {
+                if !rsi.results.values.is_empty() {
+                    println!(
+                        "RSI series {:?}: latest = {:.2}",
+                        series_type, rsi.results.values[0].value
+                    );
+                }
+            }
+            Err(e) => {
+                println!("RSI series {:?}: {:?}", series_type, e);
+            }
+        }
+    }
+}
+
+/// Test RSI with timestamp filters
+#[tokio::test]
+async fn test_get_rsi_with_date_range() {
+    if !has_api_key() {
+        eprintln!("Skipping test: POLYGON_API_KEY not set");
+        return;
+    }
+
+    let client = create_rest_client();
+    let (from, to) = test_date_range();
+
+    let request = GetRsiRequest::new(TEST_TICKER)
+        .timespan(IndicatorTimespan::Day)
+        .window(14)
+        .timestamp_gte(&from)
+        .timestamp_lte(&to)
+        .order(Order::Asc)
+        .limit(50);
+
+    let response = client.execute(request).await;
+
+    match response {
+        Ok(rsi) => {
+            println!(
+                "RSI for {} from {} to {}: {} values",
+                TEST_TICKER,
+                from,
+                to,
+                rsi.results.values.len()
+            );
+
+            // Verify all values are in valid range
+            for value in &rsi.results.values {
+                assert!(
+                    value.value >= 0.0 && value.value <= 100.0,
+                    "RSI should be 0-100"
+                );
+            }
+        }
+        Err(e) => {
+            panic!("Failed to fetch RSI with date range: {:?}", e);
+        }
+    }
+}
+
+/// Test RSI pagination
+#[tokio::test]
+async fn test_get_rsi_pagination() {
+    if !has_api_key() {
+        eprintln!("Skipping test: POLYGON_API_KEY not set");
+        return;
+    }
+
+    let client = create_rest_client();
+
+    let request = GetRsiRequest::new(TEST_TICKER)
+        .timespan(IndicatorTimespan::Day)
+        .window(14)
+        .limit(10); // Small limit to encourage pagination
+
+    let mut stream = client.stream_with_mode(request, PaginationMode::MaxItems(25));
+    let mut count = 0;
+
+    while let Some(result) = stream.next().await {
+        match result {
+            Ok(value) => {
+                count += 1;
+                // Verify each RSI value is valid
+                assert!(
+                    value.value >= 0.0 && value.value <= 100.0,
+                    "RSI should be 0-100"
+                );
+            }
+            Err(e) => {
+                panic!("Error during RSI pagination: {:?}", e);
+            }
+        }
+    }
+
+    println!("Streamed {} RSI values with pagination", count);
+    assert!(count > 0, "Expected at least one RSI value from pagination");
+}
+
+/// Test RSI helper methods with live data
+#[tokio::test]
+async fn test_rsi_helper_methods() {
+    if !has_api_key() {
+        eprintln!("Skipping test: POLYGON_API_KEY not set");
+        return;
+    }
+
+    let client = create_rest_client();
+
+    let request = GetRsiRequest::new(TEST_TICKER)
+        .timespan(IndicatorTimespan::Day)
+        .window(14)
+        .limit(100); // Get enough data to likely find different conditions
+
+    let response = client.execute(request).await;
+
+    if let Ok(rsi) = response {
+        let mut oversold_count = 0;
+        let mut overbought_count = 0;
+        let mut neutral_count = 0;
+
+        for value in &rsi.results.values {
+            if value.is_oversold() {
+                oversold_count += 1;
+            } else if value.is_overbought() {
+                overbought_count += 1;
+            } else if value.is_neutral() {
+                neutral_count += 1;
+            }
+        }
+
+        println!(
+            "RSI conditions analysis for {} values:",
+            rsi.results.values.len()
+        );
+        println!("  Oversold (< 30): {}", oversold_count);
+        println!("  Overbought (> 70): {}", overbought_count);
+        println!("  Neutral (30-70): {}", neutral_count);
+
+        // Verify totals add up
+        assert_eq!(
+            oversold_count + overbought_count + neutral_count,
+            rsi.results.values.len(),
+            "All values should be categorized"
+        );
+    }
+}
+
+/// Test RSI for alternative ticker
+#[tokio::test]
+async fn test_get_rsi_alt_ticker() {
+    if !has_api_key() {
+        eprintln!("Skipping test: POLYGON_API_KEY not set");
+        return;
+    }
+
+    let client = create_rest_client();
+
+    let request = GetRsiRequest::new(TEST_TICKER_ALT)
+        .timespan(IndicatorTimespan::Day)
+        .window(14)
+        .limit(10);
+
+    let response = client.execute(request).await;
+
+    match response {
+        Ok(rsi) => {
+            assert!(
+                !rsi.results.values.is_empty(),
+                "Expected RSI values for {}",
+                TEST_TICKER_ALT
+            );
+            println!(
+                "RSI for {}: {} values, latest = {:.2}",
+                TEST_TICKER_ALT,
+                rsi.results.values.len(),
+                rsi.results.values[0].value
+            );
+        }
+        Err(e) => {
+            panic!("Failed to fetch RSI for {}: {:?}", TEST_TICKER_ALT, e);
+        }
+    }
 }
