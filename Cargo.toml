@@ -44,14 +44,56 @@ tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 
 [features]
 default = ["rustls", "gzip", "ws"]
+
+# TLS backends
 rustls = ["reqwest/rustls-tls", "tokio-tungstenite?/rustls-tls-native-roots"]
 native-tls = ["reqwest/native-tls", "tokio-tungstenite?/native-tls"]
+
+# Compression
 gzip = ["reqwest/gzip"]
+
+# WebSocket support
 ws = ["dep:tokio-tungstenite", "dep:dashmap"]
+
+# SIMD JSON parsing
 simd-json = ["dep:simd-json"]
+
+# Decimal precision
 decimal = ["dep:rust_decimal"]
+
+# Blocking runtime
 blocking = ["tokio/rt-multi-thread"]
+
+# Code generation
 codegen = []
+
+# Asset class features
+options = []
+futures = []
+forex = []
+crypto = []
+indices = []
+
+# Data category features
+fundamentals = []
+corporate-actions = []
+news = []
+short-data = []
+indicators-full = []
+
+# Partner features
+benzinga = []
+etf-global = []
+tmx = []
+
+# Economy features
+economy = []
+
+# Convenience bundles
+all-assets = ["options", "futures", "forex", "crypto", "indices"]
+all-data = ["fundamentals", "corporate-actions", "news", "short-data", "indicators-full"]
+all-partners = ["benzinga", "etf-global", "tmx"]
+full = ["all-assets", "all-data", "all-partners", "economy", "ws"]
 
 [[bench]]
 name = "json_parsing"
