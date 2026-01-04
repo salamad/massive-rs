@@ -47,9 +47,18 @@ impl RestClient {
     ///
     /// # Errors
     ///
-    /// Returns an error if the HTTP client cannot be created.
+    /// Returns an error if:
+    /// - The HTTP client cannot be created
+    /// - The API key is empty (set `MASSIVE_API_KEY` environment variable or provide a key)
     #[instrument(skip_all)]
     pub fn new(config: RestConfig) -> Result<Self, MassiveError> {
+        // Validate API key is not empty
+        if config.api_key.is_empty() {
+            return Err(MassiveError::Auth(
+                "API key is empty. Set MASSIVE_API_KEY environment variable or provide a key via RestConfig::new()".into()
+            ));
+        }
+
         let mut builder = Client::builder()
             .connect_timeout(config.connect_timeout)
             .timeout(config.request_timeout)
@@ -449,5 +458,21 @@ mod tests {
         assert_eq!(url.path(), "/v2/test");
         assert!(url.query().unwrap().contains("limit=100"));
         assert!(url.query().unwrap().contains("sort=asc"));
+    }
+
+    #[test]
+    fn test_empty_api_key_fails() {
+        let config = RestConfig {
+            api_key: ApiKey::default(), // Empty API key
+            ..Default::default()
+        };
+        let result = RestClient::new(config);
+        assert!(result.is_err());
+        match result {
+            Err(MassiveError::Auth(msg)) => {
+                assert!(msg.contains("API key is empty"));
+            }
+            _ => panic!("Expected MassiveError::Auth"),
+        }
     }
 }

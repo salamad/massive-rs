@@ -2,6 +2,16 @@
 //!
 //! This script handles OpenAPI code generation when the `codegen` feature is enabled.
 //! For normal builds, it simply prints rerun-if-changed directives.
+//!
+//! # Code Generation Status
+//!
+//! **WARNING**: The `codegen` feature is currently a placeholder and does NOT generate
+//! functional code. All endpoints and models are manually implemented in `src/rest/endpoints/`
+//! and `src/models/`. The codegen infrastructure is reserved for future use when the
+//! Massive.com OpenAPI specification becomes available.
+//!
+//! If you enable the `codegen` feature, the build will succeed but only generate
+//! empty placeholder files with comments.
 
 use std::path::Path;
 
@@ -54,6 +64,8 @@ fn generate_from_openapi() {
     }
 
     // Generate placeholder files
+    // NOTE: This is placeholder infrastructure. Actual code generation from OpenAPI
+    // spec is not implemented. All endpoints are manually implemented in src/rest/endpoints/.
     let models_path = Path::new(&out_dir).join("generated_models.rs");
     let requests_path = Path::new(&out_dir).join("generated_requests.rs");
 
@@ -61,10 +73,12 @@ fn generate_from_openapi() {
         &models_path,
         r#"//! Generated models from OpenAPI spec.
 //!
-//! This file is auto-generated. Do not edit manually.
-
-// Placeholder for generated models.
-// Run with codegen feature and valid OpenAPI spec to generate actual models.
+//! **WARNING**: This file contains placeholder content only.
+//! The `codegen` feature does NOT currently generate functional code.
+//! All models are manually implemented in `src/models/` and `src/rest/endpoints/`.
+//!
+//! This infrastructure is reserved for future use when the Massive.com
+//! OpenAPI specification becomes available.
 "#,
     )
     .expect("Failed to write generated models");
@@ -73,16 +87,18 @@ fn generate_from_openapi() {
         &requests_path,
         r#"//! Generated request builders from OpenAPI spec.
 //!
-//! This file is auto-generated. Do not edit manually.
-
-// Placeholder for generated request builders.
-// Run with codegen feature and valid OpenAPI spec to generate actual requests.
+//! **WARNING**: This file contains placeholder content only.
+//! The `codegen` feature does NOT currently generate functional code.
+//! All request builders are manually implemented in `src/rest/endpoints/`.
+//!
+//! This infrastructure is reserved for future use when the Massive.com
+//! OpenAPI specification becomes available.
 "#,
     )
     .expect("Failed to write generated requests");
 
     println!(
-        "cargo:warning=Generated placeholder model files in {}",
+        "cargo:warning=codegen feature enabled but OpenAPI code generation is not implemented. Generated placeholder files in {}",
         out_dir
     );
 }

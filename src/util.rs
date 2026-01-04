@@ -17,8 +17,9 @@ use smol_str::SmolStr;
 /// use massive_rs::util::UnixMs;
 ///
 /// let ts = UnixMs::now();
-/// let datetime = ts.as_datetime();
-/// println!("Current time: {}", datetime);
+/// if let Some(datetime) = ts.as_datetime() {
+///     println!("Current time: {}", datetime);
+/// }
 /// ```
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 #[repr(transparent)]
@@ -26,12 +27,15 @@ pub struct UnixMs(pub i64);
 
 impl UnixMs {
     /// Create a timestamp for the current time.
+    ///
+    /// Returns 0 if the system clock is before Unix epoch (should never happen
+    /// on properly configured systems).
     pub fn now() -> Self {
         Self(
             std::time::SystemTime::now()
                 .duration_since(std::time::UNIX_EPOCH)
-                .unwrap()
-                .as_millis() as i64,
+                .map(|d| d.as_millis() as i64)
+                .unwrap_or(0),
         )
     }
 
@@ -46,7 +50,18 @@ impl UnixMs {
     }
 
     /// Convert to a chrono DateTime.
-    pub fn as_datetime(&self) -> chrono::DateTime<chrono::Utc> {
+    ///
+    /// Returns `None` if the timestamp is out of range for chrono's DateTime
+    /// (e.g., corrupted or invalid data).
+    pub fn as_datetime(&self) -> Option<chrono::DateTime<chrono::Utc>> {
+        chrono::DateTime::from_timestamp_millis(self.0)
+    }
+
+    /// Convert to a chrono DateTime, using Unix epoch as fallback.
+    ///
+    /// This is useful when you need a non-optional DateTime and can tolerate
+    /// the fallback for invalid timestamps.
+    pub fn as_datetime_or_epoch(&self) -> chrono::DateTime<chrono::Utc> {
         chrono::DateTime::from_timestamp_millis(self.0).unwrap_or_default()
     }
 
@@ -90,12 +105,15 @@ pub struct UnixNs(pub i64);
 
 impl UnixNs {
     /// Create a timestamp for the current time.
+    ///
+    /// Returns 0 if the system clock is before Unix epoch (should never happen
+    /// on properly configured systems).
     pub fn now() -> Self {
         Self(
             std::time::SystemTime::now()
                 .duration_since(std::time::UNIX_EPOCH)
-                .unwrap()
-                .as_nanos() as i64,
+                .map(|d| d.as_nanos() as i64)
+                .unwrap_or(0),
         )
     }
 
@@ -264,11 +282,23 @@ mod tests {
     fn test_unix_ms_datetime_roundtrip() {
         let original = chrono::Utc::now();
         let ts = UnixMs::from_datetime(original);
-        let recovered = ts.as_datetime();
+        let recovered = ts.as_datetime().expect("valid timestamp should convert");
 
         // Should be within 1ms due to truncation
         let diff = (original.timestamp_millis() - recovered.timestamp_millis()).abs();
         assert!(diff <= 1);
+    }
+
+    #[test]
+    fn test_unix_ms_as_datetime_or_epoch() {
+        let ts = UnixMs::from_millis(1703001234567);
+        let dt = ts.as_datetime_or_epoch();
+        assert_eq!(dt.timestamp_millis(), 1703001234567);
+
+        // Invalid timestamp should return epoch
+        let invalid = UnixMs::from_millis(i64::MAX);
+        let epoch = invalid.as_datetime_or_epoch();
+        assert_eq!(epoch.timestamp(), 0);
     }
 
     #[test]

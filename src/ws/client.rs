@@ -134,7 +134,17 @@ pub struct WsStats {
 
 impl WsClient {
     /// Create a new WebSocket client with the given configuration.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the API key is empty.
     pub fn new(config: WsConfig) -> Result<Self, MassiveError> {
+        // Validate API key is not empty
+        if config.api_key.is_empty() {
+            return Err(MassiveError::Auth(
+                "API key is empty. Set MASSIVE_API_KEY environment variable or provide a key via WsConfig::new()".into()
+            ));
+        }
         Ok(Self { config })
     }
 
@@ -279,7 +289,7 @@ impl WsHandle {
         let last_msg = self.state.last_message_time.load(Ordering::Acquire);
         let now = std::time::SystemTime::now()
             .duration_since(std::time::UNIX_EPOCH)
-            .unwrap()
+            .unwrap_or(Duration::ZERO)
             .as_millis() as u64;
 
         WsStats {
@@ -459,8 +469,10 @@ where
 {
     // Send authentication
     let auth_msg = WsAuthMessage::new(config.api_key.expose());
+    let auth_json = serde_json::to_string(&auth_msg)
+        .map_err(|_| MassiveError::InvalidArgument("Failed to serialize auth message"))?;
     write
-        .send(Message::Text(serde_json::to_string(&auth_msg).unwrap()))
+        .send(Message::Text(auth_json))
         .await
         .map_err(|e| Box::new(WsError::Connection(e)))?;
 
@@ -470,8 +482,10 @@ where
     let subs: Vec<_> = state.subscriptions.iter().map(|s| s.clone()).collect();
     if !subs.is_empty() {
         let msg = WsSubscribeMessage::subscribe(&subs);
+        let sub_json = serde_json::to_string(&msg)
+            .map_err(|_| MassiveError::InvalidArgument("Failed to serialize subscribe message"))?;
         write
-            .send(Message::Text(serde_json::to_string(&msg).unwrap()))
+            .send(Message::Text(sub_json))
             .await
             .map_err(|e| Box::new(WsError::Connection(e)))?;
         debug!(count = subs.len(), "Resubscribed to existing topics");
@@ -494,7 +508,7 @@ where
                         let received_at = Instant::now();
                         let now_ms = std::time::SystemTime::now()
                             .duration_since(std::time::UNIX_EPOCH)
-                            .unwrap()
+                            .unwrap_or(Duration::ZERO)
                             .as_millis() as u64;
                         state.last_message_time.store(now_ms, Ordering::Release);
                         state.message_count.fetch_add(1, Ordering::AcqRel);
@@ -570,8 +584,11 @@ where
                         debug!(?topics, "Processing subscribe command");
                         let msg = WsSubscribeMessage::subscribe(&topics);
 
-                        let result = write.send(Message::Text(serde_json::to_string(&msg).unwrap())).await
-                            .map_err(|e| MassiveError::Ws(Box::new(WsError::Connection(e))));
+                        let result = match serde_json::to_string(&msg) {
+                            Ok(json) => write.send(Message::Text(json)).await
+                                .map_err(|e| MassiveError::Ws(Box::new(WsError::Connection(e)))),
+                            Err(_) => Err(MassiveError::InvalidArgument("Failed to serialize subscribe message")),
+                        };
 
                         if result.is_ok() {
                             for topic in topics {
@@ -585,8 +602,11 @@ where
                         debug!(?topics, "Processing unsubscribe command");
                         let msg = WsSubscribeMessage::unsubscribe(&topics);
 
-                        let result = write.send(Message::Text(serde_json::to_string(&msg).unwrap())).await
-                            .map_err(|e| MassiveError::Ws(Box::new(WsError::Connection(e))));
+                        let result = match serde_json::to_string(&msg) {
+                            Ok(json) => write.send(Message::Text(json)).await
+                                .map_err(|e| MassiveError::Ws(Box::new(WsError::Connection(e)))),
+                            Err(_) => Err(MassiveError::InvalidArgument("Failed to serialize unsubscribe message")),
+                        };
 
                         if result.is_ok() {
                             for topic in &topics {
@@ -676,9 +696,22 @@ mod tests {
 
     #[test]
     fn test_ws_client_builder() {
-        let config = WsConfig::default();
+        let config = WsConfig::new("test-api-key");
         let client = WsClient::builder().config(config).build().unwrap();
-        assert!(client.config().api_key.is_empty() || !client.config().api_key.is_empty());
+        assert!(!client.config().api_key.is_empty());
+    }
+
+    #[test]
+    fn test_ws_client_empty_api_key_fails() {
+        let config = WsConfig::default(); // Empty API key
+        let result = WsClient::new(config);
+        assert!(result.is_err());
+        match result {
+            Err(MassiveError::Auth(msg)) => {
+                assert!(msg.contains("API key is empty"));
+            }
+            _ => panic!("Expected MassiveError::Auth"),
+        }
     }
 
     #[test]
