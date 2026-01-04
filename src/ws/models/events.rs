@@ -42,6 +42,38 @@ pub enum WsEvent {
     #[serde(rename = "FMV")]
     FairMarketValue(WsFmvEvent),
 
+    /// New Order Imbalance event (auctions).
+    #[serde(rename = "NOI")]
+    OrderImbalance(WsOrderImbalanceEvent),
+
+    /// Index value event.
+    #[serde(rename = "V")]
+    IndexValue(WsIndexValueEvent),
+
+    /// Crypto trade event.
+    #[serde(rename = "XT")]
+    CryptoTrade(WsCryptoTradeEvent),
+
+    /// Crypto quote event.
+    #[serde(rename = "XQ")]
+    CryptoQuote(WsCryptoQuoteEvent),
+
+    /// Crypto aggregate event.
+    #[serde(rename = "XA")]
+    CryptoAggregate(WsCryptoAggregateEvent),
+
+    /// Crypto L2 book event.
+    #[serde(rename = "XL2")]
+    CryptoL2(WsCryptoL2Event),
+
+    /// Forex quote event.
+    #[serde(rename = "C")]
+    ForexQuote(WsForexQuoteEvent),
+
+    /// Forex aggregate event.
+    #[serde(rename = "CA")]
+    ForexAggregate(WsForexAggregateEvent),
+
     /// Unknown event type (forward compatibility).
     ///
     /// New event types added to the API won't cause parsing failures.
@@ -276,6 +308,365 @@ pub struct WsFmvEvent {
 
     /// Timestamp (Unix milliseconds).
     pub t: i64,
+}
+
+// ============================================================================
+// New Order Imbalance Event
+// ============================================================================
+
+/// Auction type for order imbalance.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum AuctionType {
+    /// Opening auction.
+    #[default]
+    Opening,
+    /// Closing auction.
+    Closing,
+    /// IPO auction.
+    Ipo,
+    /// Halt auction.
+    Halt,
+    /// Volatility auction.
+    Volatility,
+}
+
+/// Imbalance side indicator.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum ImbalanceSide {
+    /// Buy side imbalance.
+    Buy,
+    /// Sell side imbalance.
+    Sell,
+    /// No imbalance.
+    #[default]
+    None,
+}
+
+/// New Order Imbalance event.
+///
+/// Provides auction imbalance data for opening/closing auctions.
+#[derive(Debug, Clone, Deserialize)]
+pub struct WsOrderImbalanceEvent {
+    /// Ticker symbol.
+    pub sym: Symbol,
+
+    /// Timestamp (Unix milliseconds).
+    pub t: i64,
+
+    /// Type of auction.
+    pub auction_type: Option<AuctionType>,
+
+    /// Paired shares (matched in auction).
+    pub paired_shares: Option<i64>,
+
+    /// Imbalance shares (unmatched).
+    pub imbalance_shares: Option<i64>,
+
+    /// Side with the imbalance.
+    pub imbalance_side: Option<ImbalanceSide>,
+
+    /// Reference price.
+    pub reference_price: Option<f64>,
+
+    /// Near indicative price.
+    pub near_price: Option<f64>,
+
+    /// Far indicative price.
+    pub far_price: Option<f64>,
+}
+
+impl WsOrderImbalanceEvent {
+    /// Calculate imbalance percentage.
+    pub fn imbalance_percent(&self) -> Option<f64> {
+        match (self.imbalance_shares, self.paired_shares) {
+            (Some(imb), Some(paired)) if paired > 0 => Some((imb as f64 / paired as f64) * 100.0),
+            _ => None,
+        }
+    }
+}
+
+// ============================================================================
+// Index Value Event
+// ============================================================================
+
+/// Index value event.
+///
+/// Real-time index values.
+#[derive(Debug, Clone, Deserialize)]
+pub struct WsIndexValueEvent {
+    /// Index ticker (e.g., "I:SPX").
+    pub sym: Symbol,
+
+    /// Index value.
+    pub val: f64,
+
+    /// Timestamp (Unix milliseconds).
+    pub t: i64,
+}
+
+// ============================================================================
+// Crypto Events
+// ============================================================================
+
+/// Crypto trade event.
+#[derive(Debug, Clone, Deserialize)]
+pub struct WsCryptoTradeEvent {
+    /// Crypto pair (e.g., "BTC-USD").
+    pub pair: String,
+
+    /// Trade price.
+    pub p: f64,
+
+    /// Trade size.
+    pub s: f64,
+
+    /// Exchange ID.
+    pub x: i32,
+
+    /// Timestamp (Unix milliseconds).
+    pub t: i64,
+
+    /// Conditions.
+    #[serde(default)]
+    pub c: Vec<i32>,
+
+    /// Trade ID.
+    pub i: Option<String>,
+}
+
+impl WsCryptoTradeEvent {
+    /// Calculate trade value.
+    pub fn value(&self) -> f64 {
+        self.p * self.s
+    }
+}
+
+/// Crypto quote event.
+#[derive(Debug, Clone, Deserialize)]
+pub struct WsCryptoQuoteEvent {
+    /// Crypto pair (e.g., "BTC-USD").
+    pub pair: String,
+
+    /// Bid price.
+    pub bp: f64,
+
+    /// Bid size.
+    pub bs: f64,
+
+    /// Ask price.
+    pub ap: f64,
+
+    /// Ask size.
+    #[serde(rename = "as")]
+    pub ask_size: f64,
+
+    /// Exchange ID.
+    pub x: i32,
+
+    /// Timestamp (Unix milliseconds).
+    pub t: i64,
+}
+
+impl WsCryptoQuoteEvent {
+    /// Calculate bid-ask spread.
+    pub fn spread(&self) -> f64 {
+        self.ap - self.bp
+    }
+
+    /// Calculate mid price.
+    pub fn mid(&self) -> f64 {
+        (self.bp + self.ap) / 2.0
+    }
+
+    /// Calculate spread as percentage of mid.
+    pub fn spread_percent(&self) -> f64 {
+        let mid = self.mid();
+        if mid > 0.0 {
+            (self.spread() / mid) * 100.0
+        } else {
+            0.0
+        }
+    }
+}
+
+/// Crypto aggregate event.
+#[derive(Debug, Clone, Deserialize)]
+pub struct WsCryptoAggregateEvent {
+    /// Crypto pair (e.g., "BTC-USD").
+    pub pair: String,
+
+    /// Open price.
+    pub o: f64,
+
+    /// High price.
+    pub h: f64,
+
+    /// Low price.
+    pub l: f64,
+
+    /// Close price.
+    pub c: f64,
+
+    /// Volume.
+    pub v: f64,
+
+    /// VWAP.
+    pub vw: Option<f64>,
+
+    /// Window start timestamp.
+    pub s: i64,
+
+    /// Window end timestamp.
+    pub e: i64,
+}
+
+impl WsCryptoAggregateEvent {
+    /// Calculate bar range.
+    pub fn range(&self) -> f64 {
+        self.h - self.l
+    }
+
+    /// Check if bullish (green) bar.
+    pub fn is_bullish(&self) -> bool {
+        self.c > self.o
+    }
+}
+
+/// Crypto L2 book entry.
+#[derive(Debug, Clone, Deserialize)]
+pub struct WsCryptoL2Entry {
+    /// Price level.
+    pub p: f64,
+    /// Size at level.
+    pub s: f64,
+}
+
+/// Crypto L2 book event.
+#[derive(Debug, Clone, Deserialize)]
+pub struct WsCryptoL2Event {
+    /// Crypto pair.
+    pub pair: String,
+
+    /// Bid levels.
+    #[serde(default)]
+    pub b: Vec<WsCryptoL2Entry>,
+
+    /// Ask levels.
+    #[serde(default)]
+    pub a: Vec<WsCryptoL2Entry>,
+
+    /// Timestamp (Unix milliseconds).
+    pub t: i64,
+
+    /// Exchange ID.
+    pub x: Option<i32>,
+}
+
+impl WsCryptoL2Event {
+    /// Get the best bid.
+    pub fn best_bid(&self) -> Option<f64> {
+        self.b.first().map(|e| e.p)
+    }
+
+    /// Get the best ask.
+    pub fn best_ask(&self) -> Option<f64> {
+        self.a.first().map(|e| e.p)
+    }
+
+    /// Calculate spread.
+    pub fn spread(&self) -> Option<f64> {
+        match (self.best_bid(), self.best_ask()) {
+            (Some(bid), Some(ask)) => Some(ask - bid),
+            _ => None,
+        }
+    }
+}
+
+// ============================================================================
+// Forex Events
+// ============================================================================
+
+/// Forex quote event.
+#[derive(Debug, Clone, Deserialize)]
+pub struct WsForexQuoteEvent {
+    /// Currency pair (e.g., "EUR/USD").
+    pub p: String,
+
+    /// Ask price.
+    pub a: f64,
+
+    /// Bid price.
+    pub b: f64,
+
+    /// Timestamp (Unix milliseconds).
+    pub t: i64,
+
+    /// Exchange ID.
+    pub x: Option<i32>,
+}
+
+impl WsForexQuoteEvent {
+    /// Calculate bid-ask spread.
+    pub fn spread(&self) -> f64 {
+        self.a - self.b
+    }
+
+    /// Calculate mid price.
+    pub fn mid(&self) -> f64 {
+        (self.a + self.b) / 2.0
+    }
+
+    /// Calculate spread in pips (standard pairs).
+    pub fn spread_pips(&self) -> f64 {
+        self.spread() * 10000.0
+    }
+
+    /// Calculate spread in pips (JPY pairs).
+    pub fn spread_pips_jpy(&self) -> f64 {
+        self.spread() * 100.0
+    }
+}
+
+/// Forex aggregate event.
+#[derive(Debug, Clone, Deserialize)]
+pub struct WsForexAggregateEvent {
+    /// Currency pair.
+    pub pair: String,
+
+    /// Open price.
+    pub o: f64,
+
+    /// High price.
+    pub h: f64,
+
+    /// Low price.
+    pub l: f64,
+
+    /// Close price.
+    pub c: f64,
+
+    /// Volume.
+    pub v: Option<f64>,
+
+    /// Window start timestamp.
+    pub s: i64,
+
+    /// Window end timestamp.
+    pub e: i64,
+}
+
+impl WsForexAggregateEvent {
+    /// Calculate bar range.
+    pub fn range(&self) -> f64 {
+        self.h - self.l
+    }
+
+    /// Check if bullish bar.
+    pub fn is_bullish(&self) -> bool {
+        self.c > self.o
+    }
 }
 
 /// Parse a WebSocket message (handles both single events and arrays).

@@ -26,6 +26,10 @@ use smol_str::SmolStr;
 pub struct Subscription(SmolStr);
 
 impl Subscription {
+    // ========================================================================
+    // Stocks
+    // ========================================================================
+
     /// Trade subscription: `T.{symbol}`
     ///
     /// Receives real-time tick-level trade events.
@@ -54,6 +58,18 @@ impl Subscription {
         Self(SmolStr::new(format!("AM.{}", symbol)))
     }
 
+    /// New Order Imbalance subscription: `NOI.{symbol}`
+    ///
+    /// Receives order imbalance data for auctions.
+    pub fn order_imbalance(symbol: &str) -> Self {
+        Self(SmolStr::new(format!("NOI.{}", symbol)))
+    }
+
+    /// LULD (Limit Up Limit Down) subscription: `LULD.{symbol}`
+    pub fn luld(symbol: &str) -> Self {
+        Self(SmolStr::new(format!("LULD.{}", symbol)))
+    }
+
     /// Subscribe to all trades: `T.*`
     pub fn all_trades() -> Self {
         Self(SmolStr::new_static("T.*"))
@@ -73,6 +89,121 @@ impl Subscription {
     pub fn all_minute_aggs() -> Self {
         Self(SmolStr::new_static("AM.*"))
     }
+
+    // ========================================================================
+    // Options (O: prefix)
+    // ========================================================================
+
+    /// Options trade subscription: `T.O:{ticker}`
+    pub fn options_trade(ticker: &str) -> Self {
+        Self(SmolStr::new(format!("T.O:{}", ticker)))
+    }
+
+    /// Options quote subscription: `Q.O:{ticker}`
+    pub fn options_quote(ticker: &str) -> Self {
+        Self(SmolStr::new(format!("Q.O:{}", ticker)))
+    }
+
+    /// Options minute aggregate subscription: `AM.O:{ticker}`
+    pub fn options_minute_agg(ticker: &str) -> Self {
+        Self(SmolStr::new(format!("AM.O:{}", ticker)))
+    }
+
+    /// Options second aggregate subscription: `A.O:{ticker}`
+    pub fn options_second_agg(ticker: &str) -> Self {
+        Self(SmolStr::new(format!("A.O:{}", ticker)))
+    }
+
+    /// Subscribe to all options trades: `T.O:*`
+    pub fn all_options_trades() -> Self {
+        Self(SmolStr::new_static("T.O:*"))
+    }
+
+    /// Subscribe to all options quotes: `Q.O:*`
+    pub fn all_options_quotes() -> Self {
+        Self(SmolStr::new_static("Q.O:*"))
+    }
+
+    // ========================================================================
+    // Forex (C: prefix)
+    // ========================================================================
+
+    /// Forex quote subscription: `C.{from}{to}` (e.g., `C.EURUSD`)
+    pub fn forex_quote(from: &str, to: &str) -> Self {
+        Self(SmolStr::new(format!("C.{}{}", from, to)))
+    }
+
+    /// Forex minute aggregate subscription: `CA.{from}{to}`
+    pub fn forex_minute_agg(from: &str, to: &str) -> Self {
+        Self(SmolStr::new(format!("CA.{}{}", from, to)))
+    }
+
+    /// Subscribe to all forex quotes: `C.*`
+    pub fn all_forex_quotes() -> Self {
+        Self(SmolStr::new_static("C.*"))
+    }
+
+    // ========================================================================
+    // Crypto (X: prefix)
+    // ========================================================================
+
+    /// Crypto trade subscription: `XT.{from}-{to}` (e.g., `XT.BTC-USD`)
+    pub fn crypto_trade(from: &str, to: &str) -> Self {
+        Self(SmolStr::new(format!("XT.{}-{}", from, to)))
+    }
+
+    /// Crypto quote subscription: `XQ.{from}-{to}`
+    pub fn crypto_quote(from: &str, to: &str) -> Self {
+        Self(SmolStr::new(format!("XQ.{}-{}", from, to)))
+    }
+
+    /// Crypto minute aggregate subscription: `XA.{from}-{to}`
+    pub fn crypto_minute_agg(from: &str, to: &str) -> Self {
+        Self(SmolStr::new(format!("XA.{}-{}", from, to)))
+    }
+
+    /// Crypto L2 book subscription: `XL2.{from}-{to}`
+    pub fn crypto_l2(from: &str, to: &str) -> Self {
+        Self(SmolStr::new(format!("XL2.{}-{}", from, to)))
+    }
+
+    /// Subscribe to all crypto trades: `XT.*`
+    pub fn all_crypto_trades() -> Self {
+        Self(SmolStr::new_static("XT.*"))
+    }
+
+    /// Subscribe to all crypto quotes: `XQ.*`
+    pub fn all_crypto_quotes() -> Self {
+        Self(SmolStr::new_static("XQ.*"))
+    }
+
+    // ========================================================================
+    // Indices (I: prefix)
+    // ========================================================================
+
+    /// Index value subscription: `V.I:{ticker}`
+    pub fn index_value(ticker: &str) -> Self {
+        Self(SmolStr::new(format!("V.I:{}", ticker)))
+    }
+
+    /// Index minute aggregate subscription: `AM.I:{ticker}`
+    pub fn index_minute_agg(ticker: &str) -> Self {
+        Self(SmolStr::new(format!("AM.I:{}", ticker)))
+    }
+
+    /// Index second aggregate subscription: `A.I:{ticker}`
+    pub fn index_second_agg(ticker: &str) -> Self {
+        Self(SmolStr::new(format!("A.I:{}", ticker)))
+    }
+
+    /// Subscribe to all index values: `V.I:*`
+    pub fn all_index_values() -> Self {
+        Self(SmolStr::new_static("V.I:*"))
+    }
+
+    // ========================================================================
+    // Utility Methods
+    // ========================================================================
 
     /// Create from a raw subscription string.
     ///
