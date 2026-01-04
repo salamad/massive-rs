@@ -64,9 +64,6 @@ decimal = ["dep:rust_decimal"]
 # Blocking runtime
 blocking = ["tokio/rt-multi-thread"]
 
-# Code generation
-codegen = []
-
 # Asset class features
 options = []
 futures = []
