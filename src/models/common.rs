@@ -10,6 +10,9 @@ use serde::{Deserialize, Serialize};
 ///
 /// Represents price and volume data aggregated over a time period,
 /// commonly used for charting and technical analysis.
+///
+/// Note: Volume is optional because index symbols (e.g., I:SPX) from Polygon.io
+/// do not include volume data since indices don't trade.
 #[derive(Debug, Clone, PartialEq, Default, Serialize, Deserialize)]
 pub struct AggregateBar {
     /// Ticker symbol
@@ -32,9 +35,9 @@ pub struct AggregateBar {
     #[serde(rename = "c")]
     pub close: f64,
 
-    /// Volume
-    #[serde(rename = "v")]
-    pub volume: f64,
+    /// Volume (optional for index symbols like SPX which don't have volume)
+    #[serde(rename = "v", default, skip_serializing_if = "Option::is_none")]
+    pub volume: Option<f64>,
 
     /// Volume-weighted average price
     #[serde(rename = "vw", skip_serializing_if = "Option::is_none")]
@@ -58,6 +61,11 @@ fn is_false(b: &bool) -> bool {
 }
 
 impl AggregateBar {
+    /// Get the volume or 0.0 if not available (for index symbols).
+    pub fn volume_or_zero(&self) -> f64 {
+        self.volume.unwrap_or(0.0)
+    }
+
     /// Calculate the bar range (high - low).
     pub fn range(&self) -> f64 {
         self.high - self.low
@@ -252,6 +260,9 @@ impl Quote {
 }
 
 /// Daily bar data (from snapshots/previous close).
+///
+/// Note: Volume is optional because index symbols (e.g., I:SPX) from Polygon.io
+/// do not include volume data since indices don't trade.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct DailyBar {
     /// Open price
@@ -270,9 +281,9 @@ pub struct DailyBar {
     #[serde(rename = "c")]
     pub close: f64,
 
-    /// Volume
-    #[serde(rename = "v")]
-    pub volume: f64,
+    /// Volume (optional for index symbols like SPX which don't have volume)
+    #[serde(rename = "v", default, skip_serializing_if = "Option::is_none")]
+    pub volume: Option<f64>,
 
     /// Volume-weighted average price
     #[serde(rename = "vw", skip_serializing_if = "Option::is_none")]
@@ -335,7 +346,7 @@ mod tests {
             high: 155.0,
             low: 148.0,
             close: 153.0,
-            volume: 1000000.0,
+            volume: Some(1000000.0),
             vwap: Some(151.5),
             timestamp: 1703001234567,
             transactions: Some(5000),
@@ -350,6 +361,7 @@ mod tests {
         assert_eq!(bar.upper_wick(), 2.0); // 155 - 153
         assert_eq!(bar.lower_wick(), 2.0); // 150 - 148
         assert_eq!(bar.vwap_or_mid(), 151.5);
+        assert_eq!(bar.volume_or_zero(), 1000000.0);
     }
 
     #[test]
@@ -360,7 +372,7 @@ mod tests {
             high: 152.0,
             low: 148.0,
             close: 150.1,
-            volume: 1000000.0,
+            volume: Some(1000000.0),
             vwap: None,
             timestamp: 1703001234567,
             transactions: None,
@@ -369,6 +381,26 @@ mod tests {
 
         assert!(bar.is_doji(0.5));
         assert_eq!(bar.vwap_or_mid(), 150.0); // (152 + 148) / 2
+    }
+
+    #[test]
+    fn test_aggregate_bar_no_volume() {
+        // Index symbols like SPX don't have volume
+        let bar = AggregateBar {
+            ticker: Some("I:SPX".into()),
+            open: 5000.0,
+            high: 5050.0,
+            low: 4990.0,
+            close: 5020.0,
+            volume: None,
+            vwap: None,
+            timestamp: 1703001234567,
+            transactions: None,
+            otc: false,
+        };
+
+        assert_eq!(bar.volume_or_zero(), 0.0);
+        assert!(bar.volume.is_none());
     }
 
     #[test]
@@ -445,7 +477,7 @@ mod tests {
             high: 155.0,
             low: 148.0,
             close: 153.0,
-            volume: 1000000.0,
+            volume: Some(1000000.0),
             vwap: Some(151.5),
             timestamp: 1703001234567,
             transactions: Some(5000),
@@ -458,8 +490,52 @@ mod tests {
     }
 
     #[test]
+    fn test_aggregate_bar_serde_no_volume() {
+        // Test that bars without volume (index symbols) can be serialized/deserialized
+        let bar = AggregateBar {
+            ticker: Some("I:SPX".into()),
+            open: 5000.0,
+            high: 5050.0,
+            low: 4990.0,
+            close: 5020.0,
+            volume: None,
+            vwap: None,
+            timestamp: 1703001234567,
+            transactions: None,
+            otc: false,
+        };
+
+        let json = serde_json::to_string(&bar).unwrap();
+        // Verify volume field is not in JSON when None
+        assert!(!json.contains("\"v\":"));
+        let parsed: AggregateBar = serde_json::from_str(&json).unwrap();
+        assert_eq!(bar, parsed);
+        assert!(parsed.volume.is_none());
+    }
+
+    #[test]
+    fn test_aggregate_bar_deserialize_without_volume() {
+        // This is the format returned by Polygon.io for index symbols (no volume field)
+        let json = r#"{
+            "T": "I:SPX",
+            "o": 5000.0,
+            "h": 5050.0,
+            "l": 4990.0,
+            "c": 5020.0,
+            "t": 1703001234567
+        }"#;
+
+        let bar: AggregateBar = serde_json::from_str(json).unwrap();
+        assert_eq!(bar.ticker, Some("I:SPX".into()));
+        assert_eq!(bar.open, 5000.0);
+        assert_eq!(bar.close, 5020.0);
+        assert!(bar.volume.is_none());
+        assert_eq!(bar.volume_or_zero(), 0.0);
+    }
+
+    #[test]
     fn test_aggregate_bar_deserialize_api_format() {
-        // This is the format returned by the Massive API
+        // This is the format returned by the Massive API for stocks (with volume)
         let json = r#"{
             "T": "AAPL",
             "o": 150.0,
@@ -475,6 +551,7 @@ mod tests {
         let bar: AggregateBar = serde_json::from_str(json).unwrap();
         assert_eq!(bar.ticker, Some("AAPL".into()));
         assert_eq!(bar.open, 150.0);
+        assert_eq!(bar.volume, Some(1000000.0));
         assert_eq!(bar.transactions, Some(5000));
     }
 }
